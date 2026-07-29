@@ -1,7 +1,17 @@
 import { useEditorStore } from "../store/editorStore";
 
 export function StatusBar() {
-  const { isDirty, currentFileName, currentFilePath, editorMode, setEditorMode } = useEditorStore();
+  const {
+    isDirty,
+    currentFileName,
+    currentFilePath,
+    editorMode,
+    setEditorMode,
+    cursorLine,
+    cursorColumn,
+    wordCount,
+    charCount,
+  } = useEditorStore();
 
   return (
     <div
@@ -34,6 +44,18 @@ export function StatusBar() {
           }}
         />
         {isDirty ? currentFileName : currentFilePath ? "Saved" : "Unsaved"}
+      </span>
+
+      {/* Center: cursor + counts */}
+      <span
+        className="flex items-center"
+        style={{ gap: 14, color: "var(--text-tertiary)" }}
+      >
+        {editorMode === "source" && (
+          <span>Ln {cursorLine}, Col {cursorColumn}</span>
+        )}
+        <span>{wordCount} words</span>
+        <span>{charCount} chars</span>
       </span>
 
       {/* Right: mode toggle */}

@@ -21,7 +21,7 @@ import {
   indentOnInput,
   indentUnit,
 } from "@codemirror/language";
-import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import { searchKeymap, highlightSelectionMatches, openSearchPanel } from "@codemirror/search";
 import {
   autocompletion,
   completionKeymap,
@@ -33,6 +33,45 @@ import { languages } from "@codemirror/language-data";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { useEditorStore } from "../store/editorStore";
+import { invoke } from "@tauri-apps/api/core";
+import { appConfigDir } from "@tauri-apps/api/path";
+
+async function saveImagePaste(view: EditorView, file: File): Promise<void> {
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const ext = (file.type.split("/")[1] || "png").toLowerCase().replace("jpeg", "jpg");
+    const name = `image-${Date.now()}.${ext}`;
+
+    const { currentFilePath } = useEditorStore.getState();
+    let targetDir: string;
+    let markdownPath: string;
+    if (currentFilePath) {
+      const sep = currentFilePath.includes("\\") ? "\\" : "/";
+      const dir = currentFilePath.substring(0, currentFilePath.lastIndexOf(sep));
+      targetDir = `${dir}${sep}images`;
+      markdownPath = `images/${name}`;
+    } else {
+      const cfg = await appConfigDir();
+      targetDir = `${cfg}${cfg.endsWith("/") ? "" : "/"}images`;
+      markdownPath = `${targetDir}/${name}`;
+    }
+
+    try { await invoke("create_new_dir", { path: targetDir }); } catch { /* ok if exists */ }
+    const sep = targetDir.includes("\\") ? "\\" : "/";
+    const fullPath = `${targetDir}${sep}${name}`;
+    await invoke("write_binary_file", { path: fullPath, data: Array.from(bytes) });
+
+    const insert = `![](${markdownPath})`;
+    const { from, to } = view.state.selection.main;
+    view.dispatch({
+      changes: { from, to, insert },
+      selection: { anchor: from + insert.length },
+    });
+  } catch (e) {
+    console.error("Failed to paste image:", e);
+  }
+}
+
 
 const lightHighlight = HighlightStyle.define([
   { tag: tags.heading1, fontSize: "1.8em", fontWeight: "700", color: "#1f2328" },
@@ -192,6 +231,20 @@ export function CodeMirrorEditor() {
 
     const markdownKeymap = keymap.of([
       {
+        key: "Mod-Alt-f",
+        run: (view) => {
+          openSearchPanel(view);
+          return true;
+        },
+      },
+      {
+        key: "Mod-h",
+        run: (view) => {
+          openSearchPanel(view);
+          return true;
+        },
+      },
+      {
         key: "Mod-b",
         run: (view) => {
           const { from, to } = view.state.selection.main;
@@ -258,6 +311,24 @@ export function CodeMirrorEditor() {
           indentWithTab,
         ]),
         EditorView.lineWrapping,
+        EditorView.domEventHandlers({
+          paste(event, view) {
+            const items = event.clipboardData?.items;
+            if (!items) return false;
+            for (let i = 0; i < items.length; i++) {
+              const item = items[i];
+              if (item.kind === "file" && item.type.startsWith("image/")) {
+                const file = item.getAsFile();
+                if (file) {
+                  event.preventDefault();
+                  void saveImagePaste(view, file);
+                  return true;
+                }
+              }
+            }
+            return false;
+          },
+        }),
         updateListener,
         themeComp.current.of(isDark ? EditorView.theme({}, { dark: true }) : EditorView.theme({})),
         highlightComp.current.of(syntaxHighlighting(isDark ? darkHighlight : lightHighlight)),
