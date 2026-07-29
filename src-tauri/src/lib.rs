@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use tauri::{Emitter, Manager};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FileNode {
@@ -109,6 +110,84 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .setup(|app| {
+            use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+
+            let new_file = MenuItemBuilder::with_id("new_file", "New File")
+                .accelerator("CmdOrCtrl+N")
+                .build(app)?;
+            let open_file = MenuItemBuilder::with_id("open_file", "Open File…")
+                .accelerator("CmdOrCtrl+O")
+                .build(app)?;
+            let open_folder = MenuItemBuilder::with_id("open_folder", "Open Folder…")
+                .accelerator("CmdOrCtrl+Shift+O")
+                .build(app)?;
+            let save = MenuItemBuilder::with_id("save", "Save")
+                .accelerator("CmdOrCtrl+S")
+                .build(app)?;
+            let save_as = MenuItemBuilder::with_id("save_as", "Save As…")
+                .accelerator("CmdOrCtrl+Shift+S")
+                .build(app)?;
+
+            let file_menu = SubmenuBuilder::new(app, "File")
+                .item(&new_file)
+                .item(&open_file)
+                .item(&open_folder)
+                .separator()
+                .item(&save)
+                .item(&save_as)
+                .build()?;
+
+            let view_menu = SubmenuBuilder::new(app, "View")
+                .item(
+                    &MenuItemBuilder::with_id("toggle_sidebar", "Toggle Sidebar")
+                        .accelerator("CmdOrCtrl+\\")
+                        .build(app)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id("toggle_mode", "Toggle Source/Preview")
+                        .accelerator("CmdOrCtrl+/")
+                        .build(app)?,
+                )
+                .separator()
+                .item(
+                    &MenuItemBuilder::with_id("toggle_theme", "Toggle Theme")
+                        .accelerator("CmdOrCtrl+Shift+T")
+                        .build(app)?,
+                )
+                .build()?;
+
+            let menu = MenuBuilder::new(app)
+                .items(&[
+                    &SubmenuBuilder::new(app, "Markora")
+                        .item(&MenuItemBuilder::with_id("about", "About Markora").build(app)?)
+                        .separator()
+                        .item(&MenuItemBuilder::with_id("quit", "Quit Markora").accelerator("CmdOrCtrl+Q").build(app)?)
+                        .build()?,
+                    &file_menu,
+                    &view_menu,
+                ])
+                .build()?;
+
+            app.set_menu(menu)?;
+
+            app.on_menu_event(|app_handle, event| {
+                let id = event.id().as_ref();
+                match id {
+                    "new_file" | "open_file" | "open_folder" | "save" | "save_as" |
+                    "toggle_sidebar" | "toggle_mode" | "toggle_theme" => {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.emit("menu-event", id);
+                        }
+                    }
+                    "about" => {}
+                    "quit" => { app_handle.exit(0); }
+                    _ => {}
+                }
+            });
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             read_directory,
             read_file_content,

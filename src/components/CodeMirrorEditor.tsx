@@ -170,6 +170,12 @@ export function CodeMirrorEditor() {
 
   const isDark = theme === "dark";
 
+  // ponytail: expose view for outline jump-to-line
+  useEffect(() => {
+    (window as any).__cmView = viewRef.current;
+    return () => { delete (window as any).__cmView; };
+  }, [viewRef.current]);
+
   useEffect(() => {
     if (!editorRef.current) return;
 

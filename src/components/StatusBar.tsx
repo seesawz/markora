@@ -1,38 +1,42 @@
 import { useEditorStore } from "../store/editorStore";
 
 export function StatusBar() {
-  const {
-    cursorLine,
-    cursorColumn,
-    wordCount,
-    charCount,
-    editorMode,
-    theme,
-  } = useEditorStore();
+  const { isDirty, currentFileName, currentFilePath, editorMode } = useEditorStore();
 
   return (
     <div
-      className="flex items-center justify-between h-6 px-3 text-[11px] select-none"
+      className="flex items-center justify-between select-none"
       style={{
+        height: 24,
+        padding: "0 16px",
         background: "var(--statusbar-bg)",
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
         borderTop: "1px solid var(--border-secondary)",
+        fontSize: 11,
         color: "var(--text-tertiary)",
       }}
     >
-      <div className="flex items-center gap-3">
-        <span style={{ color: "var(--text-secondary)" }}>{editorMode === "source" ? "Source" : "Preview"}</span>
-        <span>{theme === "light" ? "Light" : "Dark"}</span>
-      </div>
+      {/* Left: file status */}
+      <span
+        className="flex items-center"
+        style={{ gap: 5, color: isDirty ? "var(--accent)" : "var(--text-tertiary)" }}
+      >
+        <span
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: "50%",
+            background: isDirty ? "var(--accent)" : "var(--text-tertiary)",
+            opacity: isDirty ? 1 : 0.4,
+            display: "inline-block",
+          }}
+        />
+        {isDirty ? currentFileName : currentFilePath ? "Saved" : "Unsaved"}
+      </span>
 
-      <div className="flex items-center gap-3">
-        <span>Ln {cursorLine}, Col {cursorColumn}</span>
-        <span>{wordCount} words</span>
-        <span>{charCount} chars</span>
-        <span>UTF-8</span>
-        <span>Markdown</span>
-      </div>
+      {/* Right: mode */}
+      <span>{editorMode === "source" ? "Source" : "Preview"}</span>
     </div>
   );
 }
