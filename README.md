@@ -1,51 +1,234 @@
 # Markora
 
-A minimalist Markdown editor built with Tauri + React. Inspired by Typora, refined with modern design.
+一款极简风格的 Markdown 编辑器，基于 Tauri + React 构建。受 Typora 启发，融合现代设计美学。
 
-## Features
+## 目录
 
-- **Clean, distraction-free writing** - Kimi-inspired minimal UI
-- **Source & Preview modes** - Toggle between markdown source and rendered preview
-- **File tree sidebar** - Browse, create, and open files
-- **Outline panel** - Navigate by headings
-- **In-document search** - Find and highlight matches
-- **Light/Dark theme** - One-click theme toggle
-- **macOS native feel** - Traffic light integration, draggable titlebar
-- **Syntax highlighting** - CodeMirror 6 with 60+ languages
+- [功能特性](#功能特性)
+- [安装](#安装)
+- [快速上手](#快速上手)
+- [使用指南](#使用指南)
+  - [文件操作](#文件操作)
+  - [编辑模式](#编辑模式)
+  - [格式快捷键](#格式快捷键)
+  - [查找替换](#查找替换)
+  - [主题切换](#主题切换)
+  - [状态栏说明](#状态栏说明)
+- [快捷键一览](#快捷键一览)
+- [技术栈](#技术栈)
+- [开发构建](#开发构建)
+- [许可证](#许可证)
 
-## Tech Stack
+## 功能特性
 
-- **Tauri 2** - Lightweight desktop framework (Rust backend)
-- **React 19 + TypeScript** - Frontend
-- **CodeMirror 6** - Editor engine
-- **markdown-it** - Markdown rendering
-- **Tailwind CSS 4** - Styling
-- **lucide-react** - Icons
-- **Zustand** - State management
+- **极简无干扰写作** — Kimi 风格的简约 UI，专注内容创作
+- **源码与预览双模式** — 一键切换 Markdown 源码与渲染预览
+- **语法高亮** — CodeMirror 6 驱动，支持 60+ 编程语言代码高亮
+- **明暗双主题** — 一键切换浅色/深色主题，完整适配
+- **macOS 原生体验** — 原生菜单栏、交通灯窗口控制、可拖拽标题栏
+- **实时脏状态追踪** — 修改后即时标记，避免内容丢失
+- **Markdown 排版优化** — Typora 风格预览，精美排版
 
-## Getting Started
+## 安装
+
+### 系统要求
+
+- **macOS** 11.0 及以上（Apple Silicon / Intel）
+- Windows / Linux 版本可自行从源码构建
+
+### 下载安装
+
+从 [GitHub Releases](https://github.com/seesawz/markora/releases) 下载最新版本的 `.dmg` 安装包：
+
+1. 打开 `.dmg` 文件
+2. 将 `Markora.app` 拖拽到「应用程序」文件夹
+3. 首次打开时，若系统提示无法验证开发者，请在「系统设置 → 隐私与安全性」中点击「仍要打开」
+
+### 常见安装问题
+
+#### 提示「无法打开 Markora，因为无法验证开发者」
+
+这是 macOS Gatekeeper 安全机制，因为应用未经 Apple 开发者账号公证。请按以下方式解决：
+
+**方法一：右键打开（最简单）**
+
+在「应用程序」中找到 Markora，按住 `Control` 键点击图标，选择「打开」，然后在弹窗中再次点击「打开」即可。
+
+**方法二：系统设置中允许**
+
+1. 尝试打开应用，出现提示后点击「取消」
+2. 打开「系统设置 → 隐私与安全性」
+3. 滚动到页面底部，找到「已阻止使用 Markora」的提示
+4. 点击「仍要打开」
+
+## 快速上手
+
+1. 启动 Markora，进入空白编辑状态
+2. 直接输入 Markdown 内容开始写作
+3. 按 `Cmd + S` 保存文件到本地
+4. 按 `Cmd + /` 切换源码 / 预览模式
+
+## 使用指南
+
+### 文件操作
+
+#### 新建文件
+
+- 菜单栏选择 **文件 → 新建**（`Cmd + N`）
+- 弹出保存对话框，选择位置并输入文件名
+- 文件以 `.md` 格式保存
+
+#### 打开文件
+
+- 菜单栏选择 **文件 → 打开…**（`Cmd + O`）
+- 支持 `.md` 和 `.markdown` 格式
+- 也可以直接将文件拖拽到 Dock 图标上打开
+
+#### 保存文件
+
+- **保存**：`Cmd + S` — 直接覆盖已有文件
+- **另存为**：`Cmd + Shift + S` — 以新路径/名称保存
+- 文件未保存时，状态栏会显示 ● 圆点指示器
+
+### 编辑模式
+
+Markora 提供两种查看模式，通过 `Cmd + /` 或状态栏按钮切换：
+
+#### 源码模式
+
+基于 CodeMirror 6 的专业编辑器：
+- Markdown 语法高亮（标题、粗体、斜体、引用、代码块等）
+- 代码块内多语言语法高亮（60+ 种语言）
+- 括号匹配与自动闭合
+- 自动缩进
+- 行号显示与活动行高亮
+- 长文本自动换行
+
+#### 预览模式
+
+基于 markdown-it 的实时渲染：
+- 完整的 Markdown 语法渲染
+- 支持 HTML 标签
+- 链接自动识别
+- 任务列表复选框
+- Typora 风格精美排版
+
+> **提示**：预览模式下不可编辑，切换回源码模式进行修改。
+
+### 格式快捷键
+
+在源码模式下，可用以下快捷键快速格式化文本：
+
+| 快捷键 | 作用 | 说明 |
+|--------|------|------|
+| `Cmd + B` | **加粗** | 选中文字后按，或直接按插入粗体标记 |
+| `Cmd + I` | *斜体* | 选中文字后按，或直接按插入斜体标记 |
+| `Cmd + K` | 插入链接 | 自动生成 `[]()` 链接格式 |
+| `Tab` | 缩进 | 插入 2 空格缩进 |
+
+### 查找替换
+
+在源码模式下按 `Cmd + F` 打开查找栏：
+
+- 输入关键词，所有匹配项会高亮显示
+- 按 `Enter` 跳转到下一个匹配
+- 按 `Shift + Enter` 跳转到上一个匹配
+- 按 `Esc` 关闭查找栏
+
+### 主题切换
+
+- 菜单栏选择 **显示 → 切换主题**（`Cmd + Shift + T`）
+- 浅色与深色主题均已精心调配，编辑器、预览、状态栏完整适配
+
+### 状态栏说明
+
+底部状态栏实时显示文件状态：
+
+- **左侧** — 文件名及保存状态
+  - 无标记：文件已保存
+  - ● 圆点：文件有未保存的修改
+- **右侧** — 模式切换按钮
+  - **编辑图标**：切换到源码模式
+  - **眼睛图标**：切换到预览模式
+
+## 快捷键一览
+
+### 文件操作
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Cmd + N` | 新建文件 |
+| `Cmd + O` | 打开文件 |
+| `Cmd + S` | 保存 |
+| `Cmd + Shift + S` | 另存为 |
+
+### 编辑
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Cmd + Z` | 撤销 |
+| `Cmd + Shift + Z` | 重做 |
+| `Cmd + X` | 剪切 |
+| `Cmd + C` | 复制 |
+| `Cmd + V` | 粘贴 |
+| `Cmd + A` | 全选 |
+| `Cmd + F` | 查找 |
+| `Tab` | 缩进（2 空格） |
+
+### 格式
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Cmd + B` | 加粗 |
+| `Cmd + I` | 斜体 |
+| `Cmd + K` | 插入链接 |
+
+### 视图
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Cmd + /` | 切换源码 / 预览模式 |
+| `Cmd + Shift + T` | 切换浅色 / 深色主题 |
+
+### 应用
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Cmd + Q` | 退出应用 |
+
+## 技术栈
+
+- **Tauri 2** — 轻量桌面框架（Rust 后端）
+- **React 19 + TypeScript** — 前端框架
+- **CodeMirror 6** — 编辑器引擎
+- **markdown-it** — Markdown 渲染
+- **Tailwind CSS 4** — 样式
+- **lucide-react** — 图标
+- **Zustand** — 状态管理
+
+## 开发构建
+
+### 环境要求
+
+- Node.js 18+
+- Rust 工具链
+- macOS 开发环境（Xcode Command Line Tools）
+
+### 开发模式
 
 ```bash
 npm install
 npm run tauri dev
 ```
 
-## Build
+### 生产构建
 
 ```bash
 npm run tauri build
 ```
 
-## Keyboard Shortcuts
+构建产物位于 `src-tauri/target/release/bundle/` 目录。
 
-| Shortcut | Action |
-|----------|--------|
-| `Cmd + S` | Save file |
-| `Cmd + \` | Toggle sidebar |
-| `Cmd + /` | Toggle source/preview |
-| `Cmd + B` | Bold |
-| `Cmd + I` | Italic |
-
-## License
+## 许可证
 
 MIT
