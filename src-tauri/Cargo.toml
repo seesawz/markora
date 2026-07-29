@@ -1,12 +1,12 @@
 [package]
-name = "typora-clone"
+name = "markora"
 version = "0.1.0"
-description = "A Typora-like Markdown editor"
+description = "Markora - A minimalist Markdown editor"
 authors = ["you"]
 edition = "2021"
 
 [lib]
-name = "typora_clone_lib"
+name = "markora_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
