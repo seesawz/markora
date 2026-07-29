@@ -3,11 +3,11 @@
 .typora-content {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif;
   color: var(--text-primary);
-  line-height: 1.7;
+  line-height: 1.75;
   font-size: 16px;
-  max-width: 820px;
+  max-width: 760px;
   margin: 0 auto;
-  padding: 40px 60px;
+  padding: 48px 64px;
   user-select: text;
   -webkit-user-select: text;
 }
@@ -35,15 +35,17 @@
 .typora-content h1 {
   font-size: 2em;
   margin-top: 0.8em;
-  margin-bottom: 0.3em;
-  border-bottom: 1px solid var(--border-primary);
-  padding-bottom: 0.3em;
+  margin-bottom: 0.4em;
+  border-bottom: 1px solid var(--border-secondary);
+  padding-bottom: 0.4em;
+  font-weight: 700;
 }
 
 .typora-content h2 {
   font-size: 1.5em;
   border-bottom: 1px solid var(--border-secondary);
   padding-bottom: 0.3em;
+  font-weight: 700;
 }
 
 .typora-content h3 { font-size: 1.25em; }
@@ -82,11 +84,11 @@
 
 .typora-content blockquote {
   border-left: 3px solid var(--accent);
-  padding: 0.5em 1em;
+  padding: 0.6em 1.2em;
   margin: 1em 0;
   color: var(--text-secondary);
   background: var(--accent-light);
-  border-radius: 0 8px 8px 0;
+  border-radius: 0 10px 10px 0;
 }
 
 .typora-content blockquote p { margin: 0.3em 0; }
@@ -104,12 +106,13 @@
 .typora-content pre {
   background: var(--code-bg);
   border: 1px solid var(--code-border);
-  border-radius: 10px;
-  padding: 16px 20px;
+  border-radius: 12px;
+  padding: 18px 22px;
   overflow-x: auto;
   margin: 1em 0;
   font-size: 0.875em;
-  line-height: 1.5;
+  line-height: 1.6;
+  box-shadow: var(--shadow-sm);
 }
 
 .typora-content pre code {

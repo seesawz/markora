@@ -100,9 +100,28 @@ export default function App() {
   }, []);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden" style={{ background: "var(--bg-primary)" }}>
-      <div className="flex-1 overflow-hidden">
-        {editorMode === "source" ? <CodeMirrorEditor /> : <MarkdownPreview />}
+    <div className="flex flex-col h-screen w-screen overflow-hidden" style={{
+      background: "var(--bg-primary)",
+      position: "relative",
+    }}>
+      <div className="flex-1 overflow-hidden" style={{
+        position: "relative",
+      }}>
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 200,
+            background: "radial-gradient(ellipse at top, var(--accent-light), transparent 70%)",
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        />
+        <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
+          {editorMode === "source" ? <CodeMirrorEditor /> : <MarkdownPreview />}
+        </div>
       </div>
       <StatusBar />
     </div>

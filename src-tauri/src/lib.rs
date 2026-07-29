@@ -119,9 +119,6 @@ pub fn run() {
             let open_file = MenuItemBuilder::with_id("open_file", "Open File…")
                 .accelerator("CmdOrCtrl+O")
                 .build(app)?;
-            let open_folder = MenuItemBuilder::with_id("open_folder", "Open Folder…")
-                .accelerator("CmdOrCtrl+Shift+O")
-                .build(app)?;
             let save = MenuItemBuilder::with_id("save", "Save")
                 .accelerator("CmdOrCtrl+S")
                 .build(app)?;
@@ -132,18 +129,12 @@ pub fn run() {
             let file_menu = SubmenuBuilder::new(app, "File")
                 .item(&new_file)
                 .item(&open_file)
-                .item(&open_folder)
                 .separator()
                 .item(&save)
                 .item(&save_as)
                 .build()?;
 
             let view_menu = SubmenuBuilder::new(app, "View")
-                .item(
-                    &MenuItemBuilder::with_id("toggle_sidebar", "Toggle Sidebar")
-                        .accelerator("CmdOrCtrl+\\")
-                        .build(app)?,
-                )
                 .item(
                     &MenuItemBuilder::with_id("toggle_mode", "Toggle Source/Preview")
                         .accelerator("CmdOrCtrl+/")
@@ -174,8 +165,8 @@ pub fn run() {
             app.on_menu_event(|app_handle, event| {
                 let id = event.id().as_ref();
                 match id {
-                    "new_file" | "open_file" | "open_folder" | "save" | "save_as" |
-                    "toggle_sidebar" | "toggle_mode" | "toggle_theme" => {
+                    "new_file" | "open_file" | "save" | "save_as" |
+                    "toggle_mode" | "toggle_theme" => {
                         if let Some(window) = app_handle.get_webview_window("main") {
                             let _ = window.emit("menu-event", id);
                         }

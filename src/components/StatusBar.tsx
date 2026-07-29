@@ -7,14 +7,15 @@ export function StatusBar() {
     <div
       className="flex items-center justify-between select-none"
       style={{
-        height: 24,
-        padding: "0 16px",
+        height: 28,
+        padding: "0 20px",
         background: "var(--statusbar-bg)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
+        backdropFilter: "blur(20px) saturate(180%)",
+        WebkitBackdropFilter: "blur(20px) saturate(180%)",
         borderTop: "1px solid var(--border-secondary)",
         fontSize: 11,
         color: "var(--text-tertiary)",
+        fontWeight: 500,
       }}
     >
       {/* Left: file status */}
