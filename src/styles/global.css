@@ -94,6 +94,16 @@ body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
+.cm-editor, .typora-content, input, textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.cm-content {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -122,9 +132,10 @@ body {
 
 /* Tauri drag region */
 [data-tauri-drag-region] {
-  -webkit-app-region: drag;
+  -webkit-app-region: drag !important;
+  cursor: default;
 }
 
 .no-drag {
-  -webkit-app-region: no-drag;
+  -webkit-app-region: no-drag !important;
 }

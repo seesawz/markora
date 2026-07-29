@@ -35,12 +35,14 @@ export function ResizeDivider() {
   return (
     <div
       onMouseDown={handleMouseDown}
-      className="w-1 cursor-col-resize flex-shrink-0 transition-colors hover:bg-blue-400/30"
+      className="w-1 cursor-col-resize flex-shrink-0 transition-colors"
       style={{
-        background: "var(--typora-border)",
+        background: "var(--border-secondary)",
         marginLeft: "-1px",
         zIndex: 10,
       }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent)")}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "var(--border-secondary)")}
     />
   );
 }

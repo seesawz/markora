@@ -56,7 +56,7 @@ export function MarkdownPreview() {
   }, [content]);
 
   return (
-    <div className="h-full w-full overflow-y-auto" style={{ background: "var(--typora-bg)" }}>
+    <div className="h-full w-full overflow-y-auto" style={{ background: "var(--bg-primary)" }}>
       <div
         ref={containerRef}
         className="typora-content"

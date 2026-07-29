@@ -71,7 +71,7 @@ export default function App() {
           </>
         )}
 
-        <div className="flex-1 overflow-hidden" style={{ background: "var(--typora-bg)" }}>
+        <div className="flex-1 overflow-hidden" style={{ background: "var(--bg-primary)" }}>
           {editorMode === "source" ? <CodeMirrorEditor /> : <MarkdownPreview />}
         </div>
       </div>

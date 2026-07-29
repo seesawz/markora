@@ -100,13 +100,14 @@ export function TitleBar() {
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
         borderBottom: "1px solid var(--border-secondary)",
-      }}
+        WebkitAppRegion: "drag",
+      } as React.CSSProperties}
     >
       {/* Space for macOS traffic lights */}
       <div style={{ width: 72, flexShrink: 0 }} />
 
       {/* Left toolbar */}
-      <div className="flex items-center gap-0.5 no-drag">
+      <div className="flex items-center gap-0.5" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
         <IconButton onClick={toggleSidebar} active={sidebarVisible} title="Toggle Sidebar (Cmd+\)">
           <PanelLeft size={18} />
         </IconButton>
@@ -134,7 +135,7 @@ export function TitleBar() {
       </div>
 
       {/* Right: mode + theme */}
-      <div className="flex items-center gap-0.5 no-drag">
+      <div className="flex items-center gap-0.5" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
         <SegmentedControl>
           <SegmentButton
             active={editorMode === "source"}

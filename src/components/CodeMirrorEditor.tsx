@@ -34,7 +34,7 @@ import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { useEditorStore } from "../store/editorStore";
 
-const typoraLightHighlight = HighlightStyle.define([
+const lightHighlight = HighlightStyle.define([
   { tag: tags.heading1, fontSize: "1.8em", fontWeight: "700", color: "#1a1a1a" },
   { tag: tags.heading2, fontSize: "1.4em", fontWeight: "700", color: "#1a1a1a" },
   { tag: tags.heading3, fontSize: "1.2em", fontWeight: "600", color: "#333" },
@@ -44,19 +44,19 @@ const typoraLightHighlight = HighlightStyle.define([
   { tag: tags.strong, fontWeight: "700" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strikethrough, textDecoration: "line-through" },
-  { tag: tags.link, color: "#4183c4", textDecoration: "underline" },
-  { tag: tags.url, color: "#4183c4" },
+  { tag: tags.link, color: "#3b82f6", textDecoration: "underline" },
+  { tag: tags.url, color: "#3b82f6" },
   { tag: tags.monospace, fontFamily: "'SF Mono', Menlo, Consolas, monospace", fontSize: "0.875em", color: "#c7254e" },
-  { tag: tags.quote, color: "#777", fontStyle: "italic" },
-  { tag: tags.list, color: "#4183c4" },
-  { tag: tags.meta, color: "#999" },
-  { tag: tags.processingInstruction, color: "#999" },
-  { tag: tags.contentSeparator, color: "#4183c4" },
+  { tag: tags.quote, color: "#6b6b6b", fontStyle: "italic" },
+  { tag: tags.list, color: "#3b82f6" },
+  { tag: tags.meta, color: "#9b9b9b" },
+  { tag: tags.processingInstruction, color: "#9b9b9b" },
+  { tag: tags.contentSeparator, color: "#3b82f6" },
 ]);
 
-const typoraDarkHighlight = HighlightStyle.define([
-  { tag: tags.heading1, fontSize: "1.8em", fontWeight: "700", color: "#e0e0e0" },
-  { tag: tags.heading2, fontSize: "1.4em", fontWeight: "700", color: "#e0e0e0" },
+const darkHighlight = HighlightStyle.define([
+  { tag: tags.heading1, fontSize: "1.8em", fontWeight: "700", color: "#e8e8e8" },
+  { tag: tags.heading2, fontSize: "1.4em", fontWeight: "700", color: "#e8e8e8" },
   { tag: tags.heading3, fontSize: "1.2em", fontWeight: "600", color: "#d4d4d4" },
   { tag: tags.heading4, fontSize: "1em", fontWeight: "600", color: "#d4d4d4" },
   { tag: tags.heading5, fontSize: "0.875em", fontWeight: "600", color: "#d4d4d4" },
@@ -64,87 +64,94 @@ const typoraDarkHighlight = HighlightStyle.define([
   { tag: tags.strong, fontWeight: "700" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strikethrough, textDecoration: "line-through" },
-  { tag: tags.link, color: "#569cd6", textDecoration: "underline" },
-  { tag: tags.url, color: "#569cd6" },
+  { tag: tags.link, color: "#60a5fa", textDecoration: "underline" },
+  { tag: tags.url, color: "#60a5fa" },
   { tag: tags.monospace, fontFamily: "'SF Mono', Menlo, Consolas, monospace", fontSize: "0.875em", color: "#ce9178" },
   { tag: tags.quote, color: "#999", fontStyle: "italic" },
-  { tag: tags.list, color: "#569cd6" },
+  { tag: tags.list, color: "#60a5fa" },
   { tag: tags.meta, color: "#666" },
   { tag: tags.processingInstruction, color: "#666" },
-  { tag: tags.contentSeparator, color: "#569cd6" },
+  { tag: tags.contentSeparator, color: "#60a5fa" },
 ]);
 
 const editorTheme = EditorView.theme({
   "&": {
     fontSize: "16px",
     height: "100%",
-    backgroundColor: "var(--typora-bg)",
+    backgroundColor: "var(--bg-primary)",
   },
   ".cm-scroller": {
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif',
     lineHeight: "1.7",
     padding: "40px 60px",
   },
   ".cm-content": {
     maxWidth: "820px",
     margin: "0 auto",
-    caretColor: "var(--typora-accent)",
+    caretColor: "var(--accent)",
+    userSelect: "text",
   },
   ".cm-gutters": {
     backgroundColor: "transparent",
     border: "none",
-    color: "var(--typora-text-secondary)",
-  },
-  ".cm-lineNumbers .cm-gutterCM": {
-    minWidth: "2.5em",
+    color: "var(--text-tertiary)",
   },
   ".cm-activeLine": {
     backgroundColor: "rgba(0, 0, 0, 0.03)",
   },
-  ":root.dark .cm-activeLine": {
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-  },
   ".cm-activeLineGutter": {
     backgroundColor: "transparent",
   },
-  ".cm-selectionBackground": {
-    backgroundColor: "var(--typora-selection) !important",
+  "&.cm-focused .cm-activeLine": {
+    backgroundColor: "rgba(0, 0, 0, 0.04)",
   },
-  "&.cm-focused .cm-selectionBackground": {
-    backgroundColor: "var(--typora-selection) !important",
+  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
+    backgroundColor: "var(--selection) !important",
   },
-  ".cm-cursor": {
-    borderLeftColor: "var(--typora-accent)",
+  "::selection": {
+    backgroundColor: "var(--selection)",
+  },
+  ".cm-cursor, .cm-dropCursor": {
+    borderLeftColor: "var(--accent)",
     borderLeftWidth: "2px",
   },
   ".cm-foldPlaceholder": {
-    backgroundColor: "var(--typora-code-bg)",
-    border: "1px solid var(--typora-border)",
-    color: "var(--typora-text-secondary)",
-    borderRadius: "3px",
-    padding: "0 4px",
+    backgroundColor: "var(--code-bg)",
+    border: "1px solid var(--border-primary)",
+    color: "var(--text-secondary)",
+    borderRadius: "4px",
+    padding: "0 6px",
+    fontSize: "12px",
   },
   ".cm-panels": {
-    backgroundColor: "var(--typora-sidebar-bg)",
-    color: "var(--typora-text)",
+    backgroundColor: "var(--bg-elevated)",
+    color: "var(--text-primary)",
+    borderTop: "1px solid var(--border-primary)",
   },
   ".cm-searchMatch": {
-    backgroundColor: "rgba(255, 213, 0, 0.3)",
+    backgroundColor: "rgba(255, 213, 0, 0.25)",
+    borderRadius: "2px",
   },
   ".cm-searchMatch.cm-searchMatch-selected": {
-    backgroundColor: "rgba(255, 213, 0, 0.6)",
+    backgroundColor: "rgba(255, 160, 0, 0.45)",
   },
   ".cm-textfield": {
-    backgroundColor: "var(--typora-bg)",
-    color: "var(--typora-text)",
-    border: "1px solid var(--typora-border)",
-    borderRadius: "4px",
+    backgroundColor: "var(--bg-primary)",
+    color: "var(--text-primary)",
+    border: "1px solid var(--border-primary)",
+    borderRadius: "6px",
+    padding: "4px 8px",
   },
   ".cm-button": {
-    backgroundColor: "var(--typora-sidebar-hover)",
-    color: "var(--typora-text)",
-    border: "1px solid var(--typora-border)",
-    borderRadius: "4px",
+    backgroundColor: "var(--bg-tertiary)",
+    color: "var(--text-primary)",
+    border: "1px solid var(--border-primary)",
+    borderRadius: "6px",
+    padding: "4px 12px",
+    fontSize: "12px",
+  },
+  ".cm-button:hover": {
+    backgroundColor: "var(--bg-hover)",
   },
 });
 
@@ -163,7 +170,6 @@ export function CodeMirrorEditor() {
 
   const isDark = theme === "dark";
 
-  // Initialize editor
   useEffect(() => {
     if (!editorRef.current) return;
 
@@ -177,6 +183,47 @@ export function CodeMirrorEditor() {
         setCursor(line.number, pos - line.from + 1);
       }
     });
+
+    const markdownKeymap = keymap.of([
+      {
+        key: "Mod-b",
+        run: (view) => {
+          const { from, to } = view.state.selection.main;
+          if (from === to) return false;
+          const selected = view.state.doc.sliceString(from, to);
+          view.dispatch({
+            changes: { from, to, insert: `**${selected}**` },
+            selection: { anchor: from + 2, head: to + 2 },
+          });
+          return true;
+        },
+      },
+      {
+        key: "Mod-i",
+        run: (view) => {
+          const { from, to } = view.state.selection.main;
+          if (from === to) return false;
+          const selected = view.state.doc.sliceString(from, to);
+          view.dispatch({
+            changes: { from, to, insert: `*${selected}*` },
+            selection: { anchor: from + 1, head: to + 1 },
+          });
+          return true;
+        },
+      },
+      {
+        key: "Mod-k",
+        run: (view) => {
+          const { from, to } = view.state.selection.main;
+          const selected = view.state.doc.sliceString(from, to) || "text";
+          view.dispatch({
+            changes: { from, to, insert: `[${selected}](url)` },
+            selection: { anchor: from + selected.length + 3, head: from + selected.length + 6 },
+          });
+          return true;
+        },
+      },
+    ]);
 
     const state = EditorState.create({
       doc: content,
@@ -195,6 +242,7 @@ export function CodeMirrorEditor() {
         crosshairCursor(),
         highlightActiveLine(),
         highlightSelectionMatches(),
+        markdownKeymap,
         keymap.of([
           ...closeBracketsKeymap,
           ...defaultKeymap,
@@ -206,7 +254,7 @@ export function CodeMirrorEditor() {
         EditorView.lineWrapping,
         updateListener,
         themeComp.current.of(isDark ? EditorView.theme({}, { dark: true }) : EditorView.theme({})),
-        highlightComp.current.of(syntaxHighlighting(isDark ? typoraDarkHighlight : typoraLightHighlight)),
+        highlightComp.current.of(syntaxHighlighting(isDark ? darkHighlight : lightHighlight)),
         editorTheme,
       ],
     });
@@ -225,7 +273,6 @@ export function CodeMirrorEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update content when loaded externally
   useEffect(() => {
     if (viewRef.current) {
       const currentContent = viewRef.current.state.doc.toString();
@@ -242,7 +289,6 @@ export function CodeMirrorEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, isDirty]);
 
-  // Theme switch
   useEffect(() => {
     if (viewRef.current) {
       viewRef.current.dispatch({
@@ -251,12 +297,12 @@ export function CodeMirrorEditor() {
             isDark ? EditorView.theme({}, { dark: true }) : EditorView.theme({})
           ),
           highlightComp.current.reconfigure(
-            syntaxHighlighting(isDark ? typoraDarkHighlight : typoraLightHighlight)
+            syntaxHighlighting(isDark ? darkHighlight : lightHighlight)
           ),
         ],
       });
     }
   }, [isDark]);
 
-  return <div ref={editorRef} className="h-full w-full overflow-hidden" />;
+  return <div ref={editorRef} className="h-full w-full overflow-hidden" style={{ background: "var(--bg-primary)" }} />;
 }
