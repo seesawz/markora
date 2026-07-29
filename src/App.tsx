@@ -3,19 +3,21 @@ import { useEditorStore } from "./store/editorStore";
 import { CodeMirrorEditor } from "./components/CodeMirrorEditor";
 import { MarkdownPreview } from "./components/MarkdownPreview";
 import { StatusBar } from "./components/StatusBar";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 async function saveImpl() {
-  const { currentFilePath: path, content, setDirty } = useEditorStore.getState();
+  const { currentFilePath: path, content, setDirty, currentFileName } = useEditorStore.getState();
   if (!path) {
-    const selected = await open({ directory: true, multiple: false });
+    const selected = await save({
+      defaultPath: currentFileName,
+      filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
+    });
     if (!selected) return;
-    const filePath = `${selected}/${useEditorStore.getState().currentFileName}`;
     try {
-      await invoke("write_file_content", { path: filePath, content });
-      useEditorStore.getState().setFilePath(filePath);
+      await invoke("write_file_content", { path: selected, content });
+      useEditorStore.getState().setFilePath(selected);
     } catch (e) {
       console.error("Failed to save:", e);
     }
@@ -53,13 +55,15 @@ export default function App() {
       const store = useEditorStore.getState();
       switch (event.payload) {
         case "new_file": {
-          const selected = await open({ directory: true, multiple: false });
+          const selected = await save({
+            defaultPath: "untitled.md",
+            filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
+          });
           if (!selected) break;
-          const filePath = `${selected}/untitled.md`;
           try {
-            await invoke("create_new_file", { path: filePath });
+            await invoke("create_new_file", { path: selected });
             store.setContent("");
-            store.setFilePath(filePath);
+            store.setFilePath(selected);
             store.setDirty(false);
           } catch (e) { console.error(e); }
           break;
@@ -77,12 +81,14 @@ export default function App() {
         }
         case "save": await saveImpl(); break;
         case "save_as": {
-          const selected = await open({ directory: true, multiple: false });
+          const selected = await save({
+            defaultPath: store.currentFileName,
+            filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
+          });
           if (!selected) break;
-          const filePath = `${selected}/${store.currentFileName}`;
           try {
-            await invoke("write_file_content", { path: filePath, content: store.content });
-            store.setFilePath(filePath);
+            await invoke("write_file_content", { path: selected, content: store.content });
+            store.setFilePath(selected);
           } catch (e) { console.error(e); }
           break;
         }

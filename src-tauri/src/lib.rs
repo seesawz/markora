@@ -148,14 +148,53 @@ pub fn run() {
                 )
                 .build()?;
 
+            let edit_menu = SubmenuBuilder::new(app, "Edit")
+                .item(
+                    &MenuItemBuilder::with_id("undo", "Undo")
+                        .accelerator("CmdOrCtrl+Z")
+                        .build(app)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id("redo", "Redo")
+                        .accelerator("CmdOrCtrl+Shift+Z")
+                        .build(app)?,
+                )
+                .separator()
+                .item(
+                    &MenuItemBuilder::with_id("cut", "Cut")
+                        .accelerator("CmdOrCtrl+X")
+                        .build(app)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id("copy", "Copy")
+                        .accelerator("CmdOrCtrl+C")
+                        .build(app)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id("paste", "Paste")
+                        .accelerator("CmdOrCtrl+V")
+                        .build(app)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id("select_all", "Select All")
+                        .accelerator("CmdOrCtrl+A")
+                        .build(app)?,
+                )
+                .build()?;
+
             let menu = MenuBuilder::new(app)
                 .items(&[
                     &SubmenuBuilder::new(app, "Markora")
                         .item(&MenuItemBuilder::with_id("about", "About Markora").build(app)?)
                         .separator()
-                        .item(&MenuItemBuilder::with_id("quit", "Quit Markora").accelerator("CmdOrCtrl+Q").build(app)?)
+                        .item(
+                            &MenuItemBuilder::with_id("quit", "Quit Markora")
+                                .accelerator("CmdOrCtrl+Q")
+                                .build(app)?,
+                        )
                         .build()?,
                     &file_menu,
+                    &edit_menu,
                     &view_menu,
                 ])
                 .build()?;
@@ -165,14 +204,16 @@ pub fn run() {
             app.on_menu_event(|app_handle, event| {
                 let id = event.id().as_ref();
                 match id {
-                    "new_file" | "open_file" | "save" | "save_as" |
-                    "toggle_mode" | "toggle_theme" => {
+                    "new_file" | "open_file" | "save" | "save_as" | "toggle_mode"
+                    | "toggle_theme" => {
                         if let Some(window) = app_handle.get_webview_window("main") {
                             let _ = window.emit("menu-event", id);
                         }
                     }
                     "about" => {}
-                    "quit" => { app_handle.exit(0); }
+                    "quit" => {
+                        app_handle.exit(0);
+                    }
                     _ => {}
                 }
             });
