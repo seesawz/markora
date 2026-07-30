@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useEditorStore } from "./store/editorStore";
-import { CodeMirrorEditor } from "./components/CodeMirrorEditor";
+import { CodeMirrorEditor, insertClipboardImage } from "./components/CodeMirrorEditor";
 import { MarkdownPreview } from "./components/MarkdownPreview";
 import { StatusBar } from "./components/StatusBar";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
@@ -50,6 +50,8 @@ async function doCut(): Promise<void> {
 async function doPaste(): Promise<void> {
   const view = getEditorView();
   if (view) {
+    // ponytail: 先尝试剪贴板图片，没有再退回文本
+    if (await insertClipboardImage(view)) return;
     try {
       const text = await readText();
       if (text) {

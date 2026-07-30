@@ -34,33 +34,32 @@ import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { useEditorStore } from "../store/editorStore";
 import { SearchPanel } from "./SearchPanel";
+import { imagePreview } from "./imagePreview";
 import { invoke } from "@tauri-apps/api/core";
-import { appConfigDir } from "@tauri-apps/api/path";
+import { appDataDir } from "@tauri-apps/api/path";
 
-async function saveImagePaste(view: EditorView, file: File): Promise<void> {
+// ponytail: Rust 端直接读剪贴板图片写文件,不经 JS 传像素(大图不卡)
+export async function insertClipboardImage(view: EditorView): Promise<boolean> {
   try {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const ext = (file.type.split("/")[1] || "png").toLowerCase().replace("jpeg", "jpg");
-    const name = `image-${Date.now()}.${ext}`;
+    const { currentFilePath, currentFileName } = useEditorStore.getState();
+    const name = `image-${Date.now()}.png`;
 
-    const { currentFilePath } = useEditorStore.getState();
     let targetDir: string;
     let markdownPath: string;
     if (currentFilePath) {
+      const base = currentFileName.replace(/\.(md|markdown)$/i, "");
       const sep = currentFilePath.includes("\\") ? "\\" : "/";
       const dir = currentFilePath.substring(0, currentFilePath.lastIndexOf(sep));
-      targetDir = `${dir}${sep}images`;
-      markdownPath = `images/${name}`;
+      targetDir = `${dir}${sep}${base}.assets`;
+      markdownPath = `${base}.assets/${name}`;
     } else {
-      const cfg = await appConfigDir();
-      targetDir = `${cfg}${cfg.endsWith("/") ? "" : "/"}images`;
+      const dataDir = await appDataDir();
+      targetDir = `${dataDir}images`;
       markdownPath = `${targetDir}/${name}`;
     }
 
-    try { await invoke("create_new_dir", { path: targetDir }); } catch { /* ok if exists */ }
-    const sep = targetDir.includes("\\") ? "\\" : "/";
-    const fullPath = `${targetDir}${sep}${name}`;
-    await invoke("write_binary_file", { path: fullPath, data: Array.from(bytes) });
+    // 一次 invoke:Rust 读剪贴板→编码 PNG→写文件;剪贴板无图会 reject
+    await invoke<string>("save_clipboard_image", { dir: targetDir, name });
 
     const insert = `![](${markdownPath})`;
     const { from, to } = view.state.selection.main;
@@ -68,8 +67,11 @@ async function saveImagePaste(view: EditorView, file: File): Promise<void> {
       changes: { from, to, insert },
       selection: { anchor: from + insert.length },
     });
+    view.focus();
+    return true;
   } catch (e) {
-    console.error("Failed to paste image:", e);
+    console.log("[paste] no clipboard image:", e);
+    return false; // 剪贴板里没有图片
   }
 }
 
@@ -320,21 +322,14 @@ export function CodeMirrorEditor() {
         ]),
         search({ top: true }),
         EditorView.lineWrapping,
+        imagePreview(),
         EditorView.domEventHandlers({
           paste(event, view) {
-            const items = event.clipboardData?.items;
-            if (!items) return false;
-            for (let i = 0; i < items.length; i++) {
-              const item = items[i];
-              if (item.kind === "file" && item.type.startsWith("image/")) {
-                const file = item.getAsFile();
-                if (file) {
-                  event.preventDefault();
-                  void saveImagePaste(view, file);
-                  return true;
-                }
-              }
-            }
+            // ponytail: 统一走剪贴板插件读图片（webview 里 clipboardData.items 常读不到截图）
+            void (async () => {
+              const inserted = await insertClipboardImage(view);
+              if (inserted) event.preventDefault();
+            })();
             return false;
           },
         }),

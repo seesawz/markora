@@ -112,6 +112,48 @@ fn write_binary_file(path: &str, data: Vec<u8>) -> Result<(), String> {
     fs::write(path, data).map_err(|e| e.to_string())
 }
 
+// 读剪贴板图片并直接写成 PNG 文件,全程在 Rust 内完成,不经过 JS 传像素
+// 返回写入的完整路径;剪贴板无图片时返回 Err
+#[tauri::command]
+fn save_clipboard_image(dir: &str, name: &str) -> Result<String, String> {
+    use arboard::Clipboard;
+    use image::{ImageBuffer, Rgba};
+    use image::ImageEncoder;
+
+    let mut cb = Clipboard::new().map_err(|e| e.to_string())?;
+    let img = cb.get_image().map_err(|e| format!("no clipboard image: {}", e))?;
+    let (w, h) = (img.width as u32, img.height as u32);
+
+    let buf: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(w, h, img.bytes.into_owned())
+        .ok_or_else(|| "invalid image buffer".to_string())?;
+
+    let mut png: Vec<u8> = Vec::new();
+    let encoder = image::codecs::png::PngEncoder::new(&mut png);
+    encoder
+        .write_image(&buf, w, h, image::ExtendedColorType::Rgba8)
+        .map_err(|e| e.to_string())?;
+
+    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let sep = std::path::MAIN_SEPARATOR;
+    let full = format!("{}{}{}", dir.trim_end_matches(['/', '\\']), sep, name);
+    fs::write(&full, png).map_err(|e| e.to_string())?;
+    Ok(full)
+}
+
+#[tauri::command]
+fn encode_image_png(rgba: Vec<u8>, width: u32, height: u32) -> Result<Vec<u8>, String> {
+    use image::{ImageBuffer, Rgba};
+    let buf: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(width, height, rgba)
+        .ok_or_else(|| "invalid image buffer size".to_string())?;
+    let mut out: Vec<u8> = Vec::new();
+    let encoder = image::codecs::png::PngEncoder::new(&mut out);
+    use image::ImageEncoder;
+    encoder
+        .write_image(&buf, width, height, image::ExtendedColorType::Rgba8)
+        .map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
 #[derive(Default)]
 struct AppState {
     close_confirmed: Mutex<bool>,
@@ -212,6 +254,8 @@ pub fn run() {
             create_new_dir,
             delete_path,
             write_binary_file,
+            encode_image_png,
+            save_clipboard_image,
             confirm_close,
             take_pending_files
         ])
