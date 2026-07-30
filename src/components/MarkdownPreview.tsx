@@ -15,7 +15,10 @@ export function MarkdownPreview() {
       : null;
     return raw.replace(/(<img[^>]+src=")([^"]+)(")/g, (_m, pre, src, post) => {
       if (/^(https?:|data:|asset:)/i.test(src)) return `${pre}${src}${post}`;
-      const abs = src.startsWith("/") ? src : docDir ? `${docDir}/${src}` : null;
+      // ponytail: markdown-it 已对中文/特殊字符 URL 编码一次,先解码回原始路径,避免 convertFileSrc 二次编码 404
+      let decoded = src;
+      try { decoded = decodeURIComponent(src); } catch { /* 含未编码字符时用原值 */ }
+      const abs = decoded.startsWith("/") ? decoded : docDir ? `${docDir}/${decoded}` : null;
       if (!abs) return `${pre}${src}${post}`;
       return `${pre}${convertFileSrc(abs)}${post}`;
     });
