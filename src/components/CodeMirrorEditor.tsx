@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EditorState, Compartment } from "@codemirror/state";
 import {
   EditorView,
@@ -21,7 +21,7 @@ import {
   indentOnInput,
   indentUnit,
 } from "@codemirror/language";
-import { searchKeymap, highlightSelectionMatches, openSearchPanel } from "@codemirror/search";
+import { highlightSelectionMatches, search } from "@codemirror/search";
 import {
   autocompletion,
   completionKeymap,
@@ -33,6 +33,7 @@ import { languages } from "@codemirror/language-data";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { useEditorStore } from "../store/editorStore";
+import { SearchPanel } from "./SearchPanel";
 import { invoke } from "@tauri-apps/api/core";
 import { appConfigDir } from "@tauri-apps/api/path";
 
@@ -194,11 +195,19 @@ const editorTheme = EditorView.theme({
   },
 });
 
+// ponytail: focus/typewriter mode — dim non-active lines, keep active line centered-ish
+const focusTheme = EditorView.theme({
+  ".cm-line": { opacity: "0.45", transition: "opacity 120ms ease" },
+  ".cm-line.cm-activeLine, .cm-activeLine": { opacity: "1" },
+});
+
 export function CodeMirrorEditor() {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const themeComp = useRef(new Compartment());
   const highlightComp = useRef(new Compartment());
+  const focusComp = useRef(new Compartment());
+  const [searchOpen, setSearchOpen] = useState(false);
   const {
     content,
     setContent,
@@ -231,16 +240,16 @@ export function CodeMirrorEditor() {
 
     const markdownKeymap = keymap.of([
       {
-        key: "Mod-Alt-f",
-        run: (view) => {
-          openSearchPanel(view);
+        key: "Mod-f",
+        run: () => {
+          setSearchOpen(true);
           return true;
         },
       },
       {
         key: "Mod-h",
-        run: (view) => {
-          openSearchPanel(view);
+        run: () => {
+          setSearchOpen(true);
           return true;
         },
       },
@@ -305,11 +314,11 @@ export function CodeMirrorEditor() {
         keymap.of([
           ...closeBracketsKeymap,
           ...defaultKeymap,
-          ...searchKeymap,
           ...historyKeymap,
           ...completionKeymap,
           indentWithTab,
         ]),
+        search({ top: true }),
         EditorView.lineWrapping,
         EditorView.domEventHandlers({
           paste(event, view) {
@@ -332,6 +341,7 @@ export function CodeMirrorEditor() {
         updateListener,
         themeComp.current.of(isDark ? EditorView.theme({}, { dark: true }) : EditorView.theme({})),
         highlightComp.current.of(syntaxHighlighting(isDark ? darkHighlight : lightHighlight)),
+        focusComp.current.of(useEditorStore.getState().focusMode ? focusTheme : []),
         editorTheme,
       ],
     });
@@ -381,5 +391,26 @@ export function CodeMirrorEditor() {
     }
   }, [isDark]);
 
-  return <div ref={editorRef} className="h-full w-full overflow-hidden" style={{ background: "var(--bg-primary)" }} />;
+  useEffect(() => {
+    const unsub = useEditorStore.subscribe((s, prev) => {
+      if (s.focusMode !== prev.focusMode && viewRef.current) {
+        viewRef.current.dispatch({
+          effects: focusComp.current.reconfigure(s.focusMode ? focusTheme : []),
+        });
+      }
+    });
+    return unsub;
+  }, []);
+
+  return (
+    <div
+      className="h-full w-full overflow-hidden"
+      style={{ background: "var(--bg-primary)", position: "relative" }}
+    >
+      <div ref={editorRef} className="h-full w-full" />
+      {searchOpen && (
+        <SearchPanel view={viewRef.current} onClose={() => setSearchOpen(false)} />
+      )}
+    </div>
+  );
 }

@@ -1,4 +1,5 @@
 import { useEditorStore } from "../store/editorStore";
+import { useT } from "../lib/i18n";
 
 export function StatusBar() {
   const {
@@ -12,6 +13,8 @@ export function StatusBar() {
     wordCount,
     charCount,
   } = useEditorStore();
+
+  const tr = useT();
 
   return (
     <div
@@ -43,7 +46,7 @@ export function StatusBar() {
             display: "inline-block",
           }}
         />
-        {isDirty ? currentFileName : currentFilePath ? "Saved" : "Unsaved"}
+        {isDirty ? currentFileName : currentFilePath ? tr.saved : tr.unsaved}
       </span>
 
       {/* Center: cursor + counts */}
@@ -54,8 +57,8 @@ export function StatusBar() {
         {editorMode === "source" && (
           <span>Ln {cursorLine}, Col {cursorColumn}</span>
         )}
-        <span>{wordCount} words</span>
-        <span>{charCount} chars</span>
+        <span>{wordCount} {tr.words}</span>
+        <span>{charCount} {tr.chars}</span>
       </span>
 
       {/* Right: mode toggle */}
@@ -70,7 +73,7 @@ export function StatusBar() {
       >
         <button
           onClick={() => setEditorMode("source")}
-          title="Edit"
+          title={tr.edit}
           style={{
             width: 22,
             height: 18,
@@ -95,7 +98,7 @@ export function StatusBar() {
         </button>
         <button
           onClick={() => setEditorMode("preview")}
-          title="Preview"
+          title={tr.preview}
           style={{
             width: 22,
             height: 18,

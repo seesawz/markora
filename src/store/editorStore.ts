@@ -3,6 +3,7 @@ import { create } from "zustand";
 export type EditorMode = "source" | "preview";
 export type SidebarTab = "files" | "outline" | "search";
 export type Theme = "light" | "dark";
+export type Lang = "zh" | "en";
 
 export interface OutlineItem {
   level: number;
@@ -23,6 +24,8 @@ interface EditorState {
   sidebarTab: SidebarTab;
   editorMode: EditorMode;
   theme: Theme;
+  lang: Lang;
+  focusMode: boolean;
   statusBarVisible: boolean;
 
   // Editor info
@@ -48,6 +51,8 @@ interface EditorState {
   setEditorMode: (mode: EditorMode) => void;
   toggleTheme: () => void;
   setTheme: (theme: Theme) => void;
+  setLang: (lang: Lang) => void;
+  toggleFocusMode: () => void;
   setStatusBarVisible: (visible: boolean) => void;
   setCursor: (line: number, column: number) => void;
   setOutline: (outline: OutlineItem[]) => void;
@@ -56,58 +61,10 @@ interface EditorState {
   updateStats: () => void;
 }
 
-const DEFAULT_CONTENT = `# Welcome to Typora Clone
-
-A **minimal** Markdown editor built with Tauri + React.
-
-## Features
-
-- Clean, distraction-free writing environment
-- Live preview mode
-- Source code mode with syntax highlighting
-- File tree sidebar
-- Outline navigation
-- Dark mode support
-
-## Quick Start
-
-1. Open a folder from the sidebar
-2. Create or open a Markdown file
-3. Start writing!
-
-### Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| Cmd + S | Save file |
-| Cmd + N | New file |
-| Cmd + O | Open folder |
-| Cmd + / | Toggle source/preview |
-| Cmd + B | Bold |
-| Cmd + I | Italic |
-
-> "The best way to predict the future is to invent it." — Alan Kay
-
-\`\`\`javascript
-function hello(name) {
-  console.log(\`Hello, \${name}!\`);
-}
-\`\`\`
-
-- [x] Build the UI
-- [x] Add markdown editing
-- [ ] Add export features
-- [ ] Add custom themes
-
----
-
-Happy writing!
-`;
-
 export const useEditorStore = create<EditorState>((set, get) => ({
   currentFilePath: null,
-  currentFileName: "Untitled.md",
-  content: DEFAULT_CONTENT,
+  currentFileName: "未命名.md",
+  content: "",
   isDirty: false,
 
   sidebarVisible: true,
@@ -115,6 +72,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   sidebarTab: "files",
   editorMode: "source",
   theme: "light",
+  lang: "zh",
+  focusMode: false,
   statusBarVisible: true,
 
   cursorLine: 1,
@@ -133,8 +92,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setFilePath: (path) => {
     const fileName = path
-      ? path.split("/").pop() || "Untitled.md"
-      : "Untitled.md";
+      ? path.split("/").pop() || "未命名.md"
+      : "未命名.md";
     set({ currentFilePath: path, currentFileName: fileName, isDirty: false });
   },
 
@@ -150,6 +109,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   toggleTheme: () => set((s) => ({ theme: s.theme === "light" ? "dark" : "light" })),
   setTheme: (theme) => set({ theme }),
+
+  setLang: (lang) => set({ lang }),
+
+  toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
 
   setStatusBarVisible: (visible) => set({ statusBarVisible: visible }),
 

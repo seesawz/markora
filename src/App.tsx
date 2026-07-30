@@ -11,6 +11,8 @@ import { writeText, readText } from "@tauri-apps/plugin-clipboard-manager";
 import { undo, redo } from "@codemirror/commands";
 import type { EditorView } from "@codemirror/view";
 import { renderMarkdown } from "./lib/markdown";
+import { t } from "./lib/i18n";
+import { rebuildMenu } from "./lib/menu";
 import typoraCss from "./styles/typora.css?raw";
 
 function getEditorView(): EditorView | null {
@@ -128,27 +130,27 @@ function editorHasSelection(): boolean {
 function buildEditorMenuItems(): MenuItem[] {
   const hasSelection = editorHasSelection();
   return [
-    { id: "cut", label: "Cut", shortcut: "⌘X", disabled: !hasSelection },
-    { id: "copy", label: "Copy", shortcut: "⌘C", disabled: !hasSelection },
-    { id: "paste", label: "Paste", shortcut: "⌘V" },
+    { id: "cut", label: t("cut"), shortcut: "⌘X", disabled: !hasSelection },
+    { id: "copy", label: t("copy"), shortcut: "⌘C", disabled: !hasSelection },
+    { id: "paste", label: t("paste"), shortcut: "⌘V" },
     { id: "sep1", separator: true },
-    { id: "select_all", label: "Select All", shortcut: "⌘A" },
+    { id: "select_all", label: t("selectAll"), shortcut: "⌘A" },
     { id: "sep2", separator: true },
-    { id: "undo", label: "Undo", shortcut: "⌘Z" },
-    { id: "redo", label: "Redo", shortcut: "⌘⇧Z" },
+    { id: "undo", label: t("undo"), shortcut: "⌘Z" },
+    { id: "redo", label: t("redo"), shortcut: "⌘⇧Z" },
     { id: "sep3", separator: true },
-    { id: "bold", label: "Bold", shortcut: "⌘B" },
-    { id: "italic", label: "Italic", shortcut: "⌘I" },
-    { id: "link", label: "Insert Link", shortcut: "⌘K" },
+    { id: "bold", label: t("bold"), shortcut: "⌘B" },
+    { id: "italic", label: t("italic"), shortcut: "⌘I" },
+    { id: "link", label: t("insertLink"), shortcut: "⌘K" },
   ];
 }
 
 function buildPreviewMenuItems(): MenuItem[] {
   const hasSelection = (window.getSelection()?.toString().length ?? 0) > 0;
   return [
-    { id: "copy", label: "Copy", shortcut: "⌘C", disabled: !hasSelection },
+    { id: "copy", label: t("copy"), shortcut: "⌘C", disabled: !hasSelection },
     { id: "sep1", separator: true },
-    { id: "select_all", label: "Select All", shortcut: "⌘A" },
+    { id: "select_all", label: t("selectAll"), shortcut: "⌘A" },
   ];
 }
 
@@ -269,8 +271,8 @@ async function confirmDiscardIfDirty(): Promise<boolean> {
   const { isDirty, currentFileName } = useEditorStore.getState();
   if (!isDirty) return true;
   const yes = await ask(
-    `"${currentFileName}" has unsaved changes. Save before continuing?`,
-    { title: "Unsaved changes", kind: "warning", okLabel: "Save", cancelLabel: "Discard" }
+    t("unsavedMsg")(currentFileName),
+    { title: t("unsavedTitle"), kind: "warning", okLabel: t("save"), cancelLabel: t("discard") }
   );
   if (yes) {
     return await saveImpl();
@@ -292,7 +294,7 @@ async function openFileFromPath(path: string): Promise<void> {
 }
 
 export default function App() {
-  const { editorMode, theme } = useEditorStore();
+  const { editorMode, theme, isDirty } = useEditorStore();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
 
   useEffect(() => {
@@ -302,6 +304,53 @@ export default function App() {
   useEffect(() => {
     setContextMenu(null);
   }, [editorMode]);
+
+  // Restore last session (file + UI prefs), build native menu, then persist on change
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("markora:session");
+      if (raw) {
+        const s = JSON.parse(raw);
+        const store = useEditorStore.getState();
+        if (s.theme) store.setTheme(s.theme);
+        if (s.lang) store.setLang(s.lang);
+        if (s.editorMode) store.setEditorMode(s.editorMode);
+        if (s.currentFilePath) {
+          // reopen the file only if no CLI/dropped file is pending
+          invoke<string[]>("take_pending_files").then(async (pending) => {
+            if (!pending || pending.length === 0) {
+              try {
+                const content = await invoke<string>("read_file_content", { path: s.currentFilePath });
+                const st = useEditorStore.getState();
+                st.setContent(content);
+                st.setFilePath(s.currentFilePath);
+                st.setDirty(false);
+              } catch { /* file gone */ }
+            } else {
+              for (const p of pending) {
+                try { await openFileFromPath(p); break; } catch {}
+              }
+            }
+          }).catch(() => {});
+        }
+      }
+    } catch {}
+
+    // JS 接管原生菜单（语言切换时重建）
+    rebuildMenu().catch((e) => console.error("build menu failed:", e));
+
+    const unsub = useEditorStore.subscribe((s) => {
+      try {
+        localStorage.setItem("markora:session", JSON.stringify({
+          currentFilePath: s.currentFilePath,
+          theme: s.theme,
+          lang: s.lang,
+          editorMode: s.editorMode,
+        }));
+      } catch {}
+    });
+    return unsub;
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -316,9 +365,10 @@ export default function App() {
     };
     document.addEventListener("keydown", onKey);
 
-    const unlisten = listen<string>("menu-event", async (event) => {
+    // shared handler for native menu events (from Rust menu or JS-rebuilt menu)
+    const handleMenuId = async (id: string) => {
       const store = useEditorStore.getState();
-      switch (event.payload) {
+      switch (id) {
         case "new_file": {
           if (!(await confirmDiscardIfDirty())) break;
           const selected = await save({
@@ -363,6 +413,12 @@ export default function App() {
           store.setEditorMode(store.editorMode === "source" ? "preview" : "source");
           break;
         case "toggle_theme": store.toggleTheme(); break;
+        case "toggle_focus": store.toggleFocusMode(); break;
+        case "toggle_lang": {
+          store.setLang(store.lang === "zh" ? "en" : "zh");
+          try { await rebuildMenu(); } catch (e) { console.error("rebuild menu failed:", e); }
+          break;
+        }
         case "close_requested": {
           if (await confirmDiscardIfDirty()) {
             try { await invoke("confirm_close"); } catch (e) { console.error(e); }
@@ -378,10 +434,17 @@ export default function App() {
         case "export_html": await exportHtml(); break;
         case "export_pdf": exportPdf(); break;
       }
-    });
+    };
+
+    // from Rust native menu (initial)
+    const unlisten = listen<string>("menu-event", (e) => { void handleMenuId(e.payload); });
+    // from JS-rebuilt menu (after language switch)
+    const onNativeMenu = (e: Event) => { void handleMenuId((e as CustomEvent<string>).detail); };
+    window.addEventListener("native-menu", onNativeMenu);
 
     return () => {
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("native-menu", onNativeMenu);
       unlisten.then((fn) => fn());
     };
   }, []);
@@ -476,6 +539,23 @@ export default function App() {
           onContextMenu={handleContextMenu}
         >
           {editorMode === "source" ? <CodeMirrorEditor /> : <MarkdownPreview />}
+          {isDirty && (
+            <div
+              title={t("unsavedTitle")}
+              style={{
+                position: "absolute",
+                top: 14,
+                right: 18,
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                background: "var(--accent)",
+                boxShadow: "0 0 0 3px var(--accent-light)",
+                zIndex: 20,
+                pointerEvents: "none",
+              }}
+            />
+          )}
         </div>
       </div>
       <StatusBar />
