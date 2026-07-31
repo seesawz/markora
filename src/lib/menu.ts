@@ -23,7 +23,6 @@ export async function rebuildMenu() {
       await MenuItem.new({ id: "save_as", text: L("另存为…", "Save As…"), accelerator: "CmdOrCtrl+Shift+S", action: emit("save_as") }),
       await MenuItem.new({ text: "-" }),
       await MenuItem.new({ id: "export_html", text: L("导出 HTML…", "Export HTML…"), action: emit("export_html") }),
-      await MenuItem.new({ id: "export_pdf", text: L("导出 PDF…", "Export PDF…"), accelerator: "CmdOrCtrl+P", action: emit("export_pdf") }),
     ],
   });
 
@@ -43,8 +42,6 @@ export async function rebuildMenu() {
   const viewMenu = await Submenu.new({
     text: L("视图", "View"),
     items: [
-      await MenuItem.new({ id: "toggle_mode", text: L("切换 源码/预览", "Toggle Source/Preview"), accelerator: "CmdOrCtrl+/", action: emit("toggle_mode") }),
-      await MenuItem.new({ text: "-" }),
       await MenuItem.new({ id: "toggle_theme", text: L("切换主题", "Toggle Theme"), accelerator: "CmdOrCtrl+Shift+T", action: emit("toggle_theme") }),
       await MenuItem.new({ id: "toggle_focus", text: L("专注模式", "Focus Mode"), accelerator: "CmdOrCtrl+Shift+F", action: emit("toggle_focus") }),
     ],
@@ -60,8 +57,6 @@ export async function rebuildMenu() {
   const appMenu = await Submenu.new({
     text: "Markora",
     items: [
-      await MenuItem.new({ id: "about", text: L("关于 Markora", "About Markora"), action: emit("about") }),
-      await MenuItem.new({ text: "-" }),
       await MenuItem.new({ id: "quit", text: L("退出 Markora", "Quit Markora"), accelerator: "CmdOrCtrl+Q", action: async () => {
         await getCurrentWindow().close();
       } }),

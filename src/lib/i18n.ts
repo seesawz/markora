@@ -7,8 +7,6 @@ const dict = {
     unsaved: "未保存",
     words: "词",
     chars: "字符",
-    edit: "编辑",
-    preview: "预览",
     untitled: "未命名.md",
     // Context menu
     cut: "剪切",
@@ -41,8 +39,6 @@ const dict = {
     unsaved: "Unsaved",
     words: "words",
     chars: "chars",
-    edit: "Edit",
-    preview: "Preview",
     untitled: "Untitled.md",
     cut: "Cut",
     copy: "Copy",

@@ -1,4 +1,5 @@
 import MarkdownIt from "markdown-it";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 const md = new MarkdownIt({
   html: true,
@@ -36,4 +37,22 @@ export function renderMarkdown(source: string): string {
     /<li>(<input type="checkbox"[^>]*>)/g,
     '<li class="task-list-item">$1'
   );
+}
+
+// 本地图片(绝对或相对路径)转 asset:// URL,webview/导出的 iframe 才能显示;http/data 不动
+export function resolveLocalImages(html: string, currentFilePath: string | null): string {
+  const docDir = currentFilePath
+    ? currentFilePath.substring(0, currentFilePath.replace(/\\/g, "/").lastIndexOf("/"))
+    : null;
+  return html.replace(/(<img[^>]+src=")([^"]+)(")/g, (_m, pre, src, post) => {
+    if (/^(https?:|data:|asset:)/i.test(src)) return `${pre}${src}${post}`;
+    // markdown-it 已对中文/特殊字符 URL 编码一次,先解码回原始路径,避免 convertFileSrc 二次编码 404
+    let decoded = src;
+    try { decoded = decodeURIComponent(src); } catch { /* 含未编码字符时用原值 */ }
+    const abs = decoded.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(decoded)
+      ? decoded
+      : docDir ? `${docDir}/${decoded}` : null;
+    if (!abs) return `${pre}${src}${post}`;
+    return `${pre}${convertFileSrc(abs)}${post}`;
+  });
 }

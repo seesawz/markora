@@ -1,75 +1,80 @@
 @import "tailwindcss";
 
 :root {
-  --bg-primary: #f7f8fa;
-  --bg-secondary: #f0f2f5;
-  --bg-tertiary: #e8ebf0;
-  --bg-elevated: #ffffff;
-  --bg-hover: rgba(0, 0, 0, 0.03);
-  --bg-active: rgba(0, 0, 0, 0.05);
-  --bg-selected: rgba(102, 126, 234, 0.10);
+  /* ponytail: Kimi 规范 -- 暖白基底 + 透明度分层 + KM Blue 品牌色 */
+  --bg-primary: #fbfaf9;       /* --Bg-GroundPC 暖白 */
+  --bg-secondary: #f5f5f5;     /* --Bg-Secondary */
+  --bg-tertiary: #f5f5f5;
+  --bg-elevated: #ffffff;      /* --Bg-Primary 卡片/面板 */
+  --bg-hover: #00000008;       /* --Fills-F1 3% */
+  --bg-active: #0000000d;      /* --Fills-F2 5% */
+  --bg-selected: #1783ff1a;    /* 浅蓝选中底 */
 
-  --text-primary: #1f2328;
-  --text-secondary: #6a737d;
-  --text-tertiary: #959da5;
+  --text-primary: #000000e6;    /* --Labels-Primary 90% */
+  --text-secondary: #00000099;  /* --Labels-Secondary 60% */
+  --text-tertiary: #00000073;   /* --Labels-Tertiary 45% */
+  --text-quaternary: #0000004d; /* --Labels-Quaternary 30% */
 
-  --border-primary: #e4e6eb;
-  --border-secondary: #edf0f3;
+  --border-primary: #00000021;   /* --Separators-S1 13% */
+  --border-secondary: #00000014; /* --Others-SubLayerBg 8% */
 
-  --accent: #667eea;
-  --accent-hover: #5568d3;
-  --accent-light: rgba(102, 126, 234, 0.10);
-  --accent-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --accent: #1783ff;       /* --Colors-KMBlue */
+  --accent-hover: #167ff7; /* --Colors-KMBlue-hover */
+  --accent-active: #167cf2;/* --Colors-KMBlue-active */
+  --accent-light: #1783ff1a;
+  --accent-gradient: linear-gradient(135deg, #1783ff 0%, #526fff 100%);
 
-  --statusbar-bg: rgba(247, 248, 250, 0.85);
+  --statusbar-bg: #fbfaf9d1;
 
-  --code-bg: #f5f6f8;
-  --code-border: #e4e6eb;
+  --code-bg: #f5f5f5;
+  --code-border: #00000021;
 
-  --selection: rgba(102, 126, 234, 0.18);
+  --selection: #1783ff33; /* --Others-TextSelected */
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.03);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 2px 10px #0000001a;
+  --shadow-md: 0 4px 16.4px #0000001a;
+  --shadow-lg: 0 12px 32px #0000001f;
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
   --radius-lg: 16px;
 
   --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 :root.dark {
-  --bg-primary: #0f1115;
-  --bg-secondary: #161a20;
-  --bg-tertiary: #1e222a;
-  --bg-elevated: #1a1e26;
-  --bg-hover: rgba(255, 255, 255, 0.04);
-  --bg-active: rgba(255, 255, 255, 0.07);
-  --bg-selected: rgba(102, 126, 234, 0.20);
+  --bg-primary: #1c1c1e;
+  --bg-secondary: #2c2c2e;
+  --bg-tertiary: #2c2c2e;
+  --bg-elevated: #2c2c2e;
+  --bg-hover: #ffffff0a;
+  --bg-active: #ffffff14;
+  --bg-selected: #1783ff26;
 
-  --text-primary: #e4e6eb;
-  --text-secondary: #9ba3ae;
-  --text-tertiary: #6b7280;
+  --text-primary: #ffffffe6;
+  --text-secondary: #ffffff99;
+  --text-tertiary: #ffffff73;
+  --text-quaternary: #ffffff4d;
 
-  --border-primary: #2a2f38;
-  --border-secondary: #20252d;
+  --border-primary: #ffffff21;
+  --border-secondary: #ffffff14;
 
-  --accent: #818cf8;
-  --accent-hover: #6366f1;
-  --accent-light: rgba(129, 140, 248, 0.15);
-  --accent-gradient: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+  --accent: #1783ff;
+  --accent-hover: #3d94ff;
+  --accent-active: #167cf2;
+  --accent-light: #1783ff26;
+  --accent-gradient: linear-gradient(135deg, #1783ff 0%, #526fff 100%);
 
-  --statusbar-bg: rgba(15, 17, 21, 0.85);
+  --statusbar-bg: #1c1c1ed1;
 
-  --code-bg: #1a1e26;
-  --code-border: #2a2f38;
+  --code-bg: #2c2c2e;
+  --code-border: #ffffff21;
 
-  --selection: rgba(129, 140, 248, 0.25);
+  --selection: #1783ff33;
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5), 0 4px 8px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 2px 10px #00000066;
+  --shadow-md: 0 4px 16.4px #00000066;
+  --shadow-lg: 0 12px 32px #00000099;
 }
 
 * {
@@ -85,7 +90,7 @@ html, body, #root {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Noto Sans", Ubuntu, Cantarell, "Helvetica Neue", sans-serif, Arial, "PingFang SC", "Source Han Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC";
   background: var(--bg-primary);
   color: var(--text-primary);
   user-select: none;
@@ -105,8 +110,8 @@ body {
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -114,20 +119,28 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12);
-  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.10);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 :root.dark ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.20);
+  background: rgba(0, 0, 0, 0.18);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 :root.dark ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.16);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 /* Tauri drag region */
@@ -140,22 +153,22 @@ body {
   -webkit-app-region: no-drag !important;
 }
 
-/* Context menu */
+/* Context menu - Kimi: 柔和的中性 hover,不用强调色 */
 .context-menu {
   position: fixed;
   z-index: 10000;
-  min-width: 200px;
-  padding: 4px;
+  min-width: 208px;
+  padding: 6px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-primary);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   font-size: 13px;
 }
 
 .context-menu-separator {
   height: 1px;
-  margin: 4px 8px;
+  margin: 6px 10px;
   background: var(--border-secondary);
 }
 
@@ -164,21 +177,21 @@ body {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 5px 12px;
+  padding: 6px 12px;
   border: none;
   background: transparent;
   color: var(--text-primary);
   font-size: 13px;
   text-align: left;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 6px;
   gap: 24px;
   font-family: inherit;
+  transition: background 120ms ease;
 }
 
 .context-menu-item:hover:not(:disabled) {
-  background: var(--accent-light);
-  color: var(--accent);
+  background: var(--bg-active);
 }
 
 .context-menu-item:disabled {
@@ -190,8 +203,4 @@ body {
   color: var(--text-tertiary);
   font-size: 12px;
   white-space: nowrap;
-}
-
-.context-menu-item:hover:not(:disabled) .context-menu-shortcut {
-  color: var(--accent);
 }

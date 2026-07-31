@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useEditorStore } from "./store/editorStore";
 import { CodeMirrorEditor, insertClipboardImage } from "./components/CodeMirrorEditor";
-import { MarkdownPreview } from "./components/MarkdownPreview";
 import { StatusBar } from "./components/StatusBar";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { open, save, ask } from "@tauri-apps/plugin-dialog";
@@ -10,7 +9,8 @@ import { listen } from "@tauri-apps/api/event";
 import { writeText, readText } from "@tauri-apps/plugin-clipboard-manager";
 import { undo, redo } from "@codemirror/commands";
 import type { EditorView } from "@codemirror/view";
-import { renderMarkdown } from "./lib/markdown";
+import { renderMarkdown, resolveLocalImages } from "./lib/markdown";
+import { wrapSelection, insertLink } from "./lib/editorOps";
 import { t } from "./lib/i18n";
 import { rebuildMenu } from "./lib/menu";
 import typoraCss from "./styles/typora.css?raw";
@@ -88,40 +88,17 @@ function doRedo(): void {
 
 function doBold(): void {
   const view = getEditorView();
-  if (!view) return;
-  const { from, to } = view.state.selection.main;
-  if (from === to) return;
-  const selected = view.state.doc.sliceString(from, to);
-  view.dispatch({
-    changes: { from, to, insert: `**${selected}**` },
-    selection: { anchor: from + 2, head: to + 2 },
-  });
-  view.focus();
+  if (view) { wrapSelection(view, "**"); view.focus(); }
 }
 
 function doItalic(): void {
   const view = getEditorView();
-  if (!view) return;
-  const { from, to } = view.state.selection.main;
-  if (from === to) return;
-  const selected = view.state.doc.sliceString(from, to);
-  view.dispatch({
-    changes: { from, to, insert: `*${selected}*` },
-    selection: { anchor: from + 1, head: to + 1 },
-  });
-  view.focus();
+  if (view) { wrapSelection(view, "*"); view.focus(); }
 }
 
 function doLink(): void {
   const view = getEditorView();
-  if (!view) return;
-  const { from, to } = view.state.selection.main;
-  const selected = view.state.doc.sliceString(from, to) || "text";
-  view.dispatch({
-    changes: { from, to, insert: `[${selected}](url)` },
-    selection: { anchor: from + selected.length + 3, head: from + selected.length + 6 },
-  });
-  view.focus();
+  if (view) { insertLink(view); view.focus(); }
 }
 
 function editorHasSelection(): boolean {
@@ -144,15 +121,6 @@ function buildEditorMenuItems(): MenuItem[] {
     { id: "bold", label: t("bold"), shortcut: "⌘B" },
     { id: "italic", label: t("italic"), shortcut: "⌘I" },
     { id: "link", label: t("insertLink"), shortcut: "⌘K" },
-  ];
-}
-
-function buildPreviewMenuItems(): MenuItem[] {
-  const hasSelection = (window.getSelection()?.toString().length ?? 0) > 0;
-  return [
-    { id: "copy", label: t("copy"), shortcut: "⌘C", disabled: !hasSelection },
-    { id: "sep1", separator: true },
-    { id: "select_all", label: t("selectAll"), shortcut: "⌘A" },
   ];
 }
 
@@ -190,56 +158,20 @@ ${bodyHtml}
 }
 
 async function exportHtml(): Promise<void> {
-  const { content, currentFileName } = useEditorStore.getState();
+  const { content, currentFileName, currentFilePath } = useEditorStore.getState();
   const defaultName = currentFileName.replace(/\.(md|markdown)$/i, "") + ".html";
   const selected = await save({
     defaultPath: defaultName,
     filters: [{ name: "HTML", extensions: ["html", "htm"] }],
   });
   if (!selected) return;
-  const body = renderMarkdown(content);
+  const body = resolveLocalImages(renderMarkdown(content), currentFilePath);
   const full = buildExportedHtml(currentFileName, body);
   try {
     await invoke("write_file_content", { path: selected, content: full });
   } catch (e) {
     console.error("Failed to export HTML:", e);
   }
-}
-
-function exportPdf(): void {
-  const { content, currentFileName } = useEditorStore.getState();
-  const body = renderMarkdown(content);
-  const html = buildExportedHtml(currentFileName, body);
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "fixed";
-  iframe.style.right = "0";
-  iframe.style.bottom = "0";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "0";
-  document.body.appendChild(iframe);
-  const doc = iframe.contentDocument || iframe.contentWindow?.document;
-  if (!doc) {
-    document.body.removeChild(iframe);
-    return;
-  }
-  doc.open();
-  doc.write(html);
-  doc.close();
-  const cleanup = () => {
-    setTimeout(() => {
-      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-    }, 500);
-  };
-  iframe.onload = () => {
-    try {
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-    } catch (e) {
-      console.error("Print failed:", e);
-    }
-    cleanup();
-  };
 }
 
 async function saveImpl() {
@@ -296,16 +228,12 @@ async function openFileFromPath(path: string): Promise<void> {
 }
 
 export default function App() {
-  const { editorMode, theme, isDirty } = useEditorStore();
+  const { theme, isDirty } = useEditorStore();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
-
-  useEffect(() => {
-    setContextMenu(null);
-  }, [editorMode]);
 
   // Restore last session (file + UI prefs), build native menu, then persist on change
   useEffect(() => {
@@ -316,7 +244,6 @@ export default function App() {
         const store = useEditorStore.getState();
         if (s.theme) store.setTheme(s.theme);
         if (s.lang) store.setLang(s.lang);
-        if (s.editorMode) store.setEditorMode(s.editorMode);
         if (s.currentFilePath) {
           // reopen the file only if no CLI/dropped file is pending
           invoke<string[]>("take_pending_files").then(async (pending) => {
@@ -329,9 +256,7 @@ export default function App() {
                 st.setDirty(false);
               } catch { /* file gone */ }
             } else {
-              for (const p of pending) {
-                try { await openFileFromPath(p); break; } catch {}
-              }
+              void openFileFromPath(pending[0]);
             }
           }).catch(() => {});
         }
@@ -341,29 +266,30 @@ export default function App() {
     // JS 接管原生菜单（语言切换时重建）
     rebuildMenu().catch((e) => console.error("build menu failed:", e));
 
+    // ponytail: 每次击键都会进这个订阅,防抖 500ms 再写 localStorage
+    let persistTimer: number | null = null;
     const unsub = useEditorStore.subscribe((s) => {
-      try {
-        localStorage.setItem("markora:session", JSON.stringify({
-          currentFilePath: s.currentFilePath,
-          theme: s.theme,
-          lang: s.lang,
-          editorMode: s.editorMode,
-        }));
-      } catch {}
+      if (persistTimer !== null) window.clearTimeout(persistTimer);
+      persistTimer = window.setTimeout(() => {
+        try {
+          localStorage.setItem("markora:session", JSON.stringify({
+            currentFilePath: s.currentFilePath,
+            theme: s.theme,
+            lang: s.lang,
+          }));
+        } catch {}
+      }, 500);
     });
-    return unsub;
+    return () => {
+      if (persistTimer !== null) window.clearTimeout(persistTimer);
+      unsub();
+    };
   }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const cmd = e.metaKey || e.ctrlKey;
       if (cmd && e.key === "s") { e.preventDefault(); saveImpl(); }
-      if (cmd && e.key === "/") {
-        e.preventDefault();
-        useEditorStore.getState().setEditorMode(
-          useEditorStore.getState().editorMode === "source" ? "preview" : "source"
-        );
-      }
     };
     document.addEventListener("keydown", onKey);
 
@@ -411,9 +337,6 @@ export default function App() {
           } catch (e) { console.error(e); }
           break;
         }
-        case "toggle_mode":
-          store.setEditorMode(store.editorMode === "source" ? "preview" : "source");
-          break;
         case "toggle_theme": store.toggleTheme(); break;
         case "toggle_focus": store.toggleFocusMode(); break;
         case "toggle_lang": {
@@ -434,7 +357,6 @@ export default function App() {
         case "undo": doUndo(); break;
         case "redo": doRedo(); break;
         case "export_html": await exportHtml(); break;
-        case "export_pdf": exportPdf(); break;
       }
     };
 
@@ -511,9 +433,7 @@ export default function App() {
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    const mode = useEditorStore.getState().editorMode;
-    const items = mode === "source" ? buildEditorMenuItems() : buildPreviewMenuItems();
-    setContextMenu({ x: e.clientX, y: e.clientY, items });
+    setContextMenu({ x: e.clientX, y: e.clientY, items: buildEditorMenuItems() });
   };
 
   return (
@@ -521,26 +441,12 @@ export default function App() {
       background: "var(--bg-primary)",
       position: "relative",
     }}>
-      <div className="flex-1 overflow-hidden" style={{
-        position: "relative",
-      }}>
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 200,
-            background: "radial-gradient(ellipse at top, var(--accent-light), transparent 70%)",
-            pointerEvents: "none",
-            zIndex: 0,
-          }}
-        />
+      <div className="flex-1 overflow-hidden" style={{ position: "relative" }}>
         <div
           style={{ position: "relative", zIndex: 1, height: "100%" }}
           onContextMenu={handleContextMenu}
         >
-          {editorMode === "source" ? <CodeMirrorEditor /> : <MarkdownPreview />}
+          <CodeMirrorEditor />
           {isDirty && (
             <div
               title={t("unsavedTitle")}

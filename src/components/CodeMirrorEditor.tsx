@@ -33,8 +33,10 @@ import { languages } from "@codemirror/language-data";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { useEditorStore } from "../store/editorStore";
+import { wrapSelection, insertLink } from "../lib/editorOps";
 import { SearchPanel } from "./SearchPanel";
 import { imagePreview } from "./imagePreview";
+import { wysiwyg } from "./wysiwyg";
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir } from "@tauri-apps/api/path";
 
@@ -77,43 +79,43 @@ export async function insertClipboardImage(view: EditorView): Promise<boolean> {
 
 
 const lightHighlight = HighlightStyle.define([
-  { tag: tags.heading1, fontSize: "1.8em", fontWeight: "700", color: "#1f2328" },
-  { tag: tags.heading2, fontSize: "1.4em", fontWeight: "700", color: "#1f2328" },
-  { tag: tags.heading3, fontSize: "1.2em", fontWeight: "600", color: "#2d333b" },
-  { tag: tags.heading4, fontSize: "1em", fontWeight: "600", color: "#2d333b" },
-  { tag: tags.heading5, fontSize: "0.875em", fontWeight: "600", color: "#444c56" },
-  { tag: tags.heading6, fontSize: "0.85em", fontWeight: "600", color: "#6a737d" },
+  { tag: tags.heading1, fontWeight: "700", color: "#000000e6" },
+  { tag: tags.heading2, fontWeight: "700", color: "#000000e6" },
+  { tag: tags.heading3, fontWeight: "650", color: "#000000b3" },
+  { tag: tags.heading4, fontWeight: "650", color: "#000000b3" },
+  { tag: tags.heading5, fontWeight: "650", color: "#00000099" },
+  { tag: tags.heading6, fontWeight: "650", color: "#00000073" },
   { tag: tags.strong, fontWeight: "700" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strikethrough, textDecoration: "line-through" },
-  { tag: tags.link, color: "#667eea", textDecoration: "underline" },
-  { tag: tags.url, color: "#667eea" },
-  { tag: tags.monospace, fontFamily: "'SF Mono', Menlo, Consolas, monospace", fontSize: "0.875em", color: "#e36209" },
-  { tag: tags.quote, color: "#6a737d", fontStyle: "italic" },
-  { tag: tags.list, color: "#667eea" },
-  { tag: tags.meta, color: "#959da5" },
-  { tag: tags.processingInstruction, color: "#959da5" },
-  { tag: tags.contentSeparator, color: "#667eea" },
+  { tag: tags.link, color: "#1783ff", textDecoration: "underline" },
+  { tag: tags.url, color: "#1783ff" },
+  { tag: tags.monospace, fontFamily: "'SF Mono', Menlo, Consolas, monospace", fontSize: "0.875em", color: "#986801" },
+  { tag: tags.quote, color: "#00000099", fontStyle: "italic" },
+  { tag: tags.list, color: "#1783ff" },
+  { tag: tags.meta, color: "#00000073" },
+  { tag: tags.processingInstruction, color: "#00000073" },
+  { tag: tags.contentSeparator, color: "#1783ff" },
 ]);
 
 const darkHighlight = HighlightStyle.define([
-  { tag: tags.heading1, fontSize: "1.8em", fontWeight: "700", color: "#e4e6eb" },
-  { tag: tags.heading2, fontSize: "1.4em", fontWeight: "700", color: "#e4e6eb" },
-  { tag: tags.heading3, fontSize: "1.2em", fontWeight: "600", color: "#d0d7de" },
-  { tag: tags.heading4, fontSize: "1em", fontWeight: "600", color: "#d0d7de" },
-  { tag: tags.heading5, fontSize: "0.875em", fontWeight: "600", color: "#adbac7" },
-  { tag: tags.heading6, fontSize: "0.85em", fontWeight: "600", color: "#8b949e" },
+  { tag: tags.heading1, fontWeight: "700", color: "#ffffffe6" },
+  { tag: tags.heading2, fontWeight: "700", color: "#ffffffe6" },
+  { tag: tags.heading3, fontWeight: "650", color: "#ffffffb3" },
+  { tag: tags.heading4, fontWeight: "650", color: "#ffffffb3" },
+  { tag: tags.heading5, fontWeight: "650", color: "#ffffff99" },
+  { tag: tags.heading6, fontWeight: "650", color: "#ffffff73" },
   { tag: tags.strong, fontWeight: "700" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strikethrough, textDecoration: "line-through" },
-  { tag: tags.link, color: "#818cf8", textDecoration: "underline" },
-  { tag: tags.url, color: "#818cf8" },
-  { tag: tags.monospace, fontFamily: "'SF Mono', Menlo, Consolas, monospace", fontSize: "0.875em", color: "#f97316" },
-  { tag: tags.quote, color: "#9ba3ae", fontStyle: "italic" },
-  { tag: tags.list, color: "#818cf8" },
-  { tag: tags.meta, color: "#6b7280" },
-  { tag: tags.processingInstruction, color: "#6b7280" },
-  { tag: tags.contentSeparator, color: "#818cf8" },
+  { tag: tags.link, color: "#1783ff", textDecoration: "underline" },
+  { tag: tags.url, color: "#1783ff" },
+  { tag: tags.monospace, fontFamily: "'SF Mono', Menlo, Consolas, monospace", fontSize: "0.875em", color: "#d9a45c" },
+  { tag: tags.quote, color: "#ffffff99", fontStyle: "italic" },
+  { tag: tags.list, color: "#1783ff" },
+  { tag: tags.meta, color: "#ffffff73" },
+  { tag: tags.processingInstruction, color: "#ffffff73" },
+  { tag: tags.contentSeparator, color: "#1783ff" },
 ]);
 
 const editorTheme = EditorView.theme({
@@ -123,13 +125,11 @@ const editorTheme = EditorView.theme({
     backgroundColor: "var(--bg-primary)",
   },
   ".cm-scroller": {
-    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif',
-    lineHeight: "1.75",
-    padding: "48px 64px",
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Noto Sans", Ubuntu, Cantarell, "Helvetica Neue", sans-serif, Arial, "PingFang SC", "Source Han Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC"',
+    lineHeight: "1.8",
+    padding: "56px 64px",
   },
   ".cm-content": {
-    maxWidth: "760px",
-    margin: "0 auto",
     caretColor: "var(--accent)",
     userSelect: "text",
   },
@@ -139,13 +139,13 @@ const editorTheme = EditorView.theme({
     color: "var(--text-tertiary)",
   },
   ".cm-activeLine": {
-    backgroundColor: "rgba(0, 0, 0, 0.03)",
+    backgroundColor: "rgba(0, 0, 0, 0.022)",
   },
   ".cm-activeLineGutter": {
     backgroundColor: "transparent",
   },
   "&.cm-focused .cm-activeLine": {
-    backgroundColor: "rgba(0, 0, 0, 0.04)",
+    backgroundColor: "rgba(0, 0, 0, 0.03)",
   },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
     backgroundColor: "var(--selection) !important",
@@ -161,7 +161,7 @@ const editorTheme = EditorView.theme({
     backgroundColor: "var(--code-bg)",
     border: "1px solid var(--border-primary)",
     color: "var(--text-secondary)",
-    borderRadius: "4px",
+    borderRadius: "6px",
     padding: "0 6px",
     fontSize: "12px",
   },
@@ -171,24 +171,24 @@ const editorTheme = EditorView.theme({
     borderTop: "1px solid var(--border-primary)",
   },
   ".cm-searchMatch": {
-    backgroundColor: "rgba(255, 213, 0, 0.25)",
-    borderRadius: "2px",
+    backgroundColor: "rgba(245, 158, 11, 0.22)",
+    borderRadius: "3px",
   },
   ".cm-searchMatch.cm-searchMatch-selected": {
-    backgroundColor: "rgba(255, 160, 0, 0.45)",
+    backgroundColor: "rgba(245, 158, 11, 0.45)",
   },
   ".cm-textfield": {
     backgroundColor: "var(--bg-primary)",
     color: "var(--text-primary)",
     border: "1px solid var(--border-primary)",
-    borderRadius: "6px",
+    borderRadius: "8px",
     padding: "4px 8px",
   },
   ".cm-button": {
     backgroundColor: "var(--bg-tertiary)",
     color: "var(--text-primary)",
     border: "1px solid var(--border-primary)",
-    borderRadius: "6px",
+    borderRadius: "8px",
     padding: "4px 12px",
     fontSize: "12px",
   },
@@ -206,7 +206,6 @@ const focusTheme = EditorView.theme({
 export function CodeMirrorEditor() {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const themeComp = useRef(new Compartment());
   const highlightComp = useRef(new Compartment());
   const focusComp = useRef(new Compartment());
   const [searchOpen, setSearchOpen] = useState(false);
@@ -233,11 +232,10 @@ export function CodeMirrorEditor() {
       if (update.docChanged) {
         setContent(update.state.doc.toString());
       }
-      if (update.selectionSet || update.docChanged) {
-        const pos = update.state.selection.main.head;
-        const line = update.state.doc.lineAt(pos);
-        setCursor(line.number, pos - line.from + 1);
-      }
+      // 始终从最新 state 读光标:replaceAll 等事务可能不带 selection 但改变了行列
+      const pos = update.state.selection.main.head;
+      const line = update.state.doc.lineAt(pos);
+      setCursor(line.number, pos - line.from + 1);
     });
 
     const markdownKeymap = keymap.of([
@@ -257,41 +255,15 @@ export function CodeMirrorEditor() {
       },
       {
         key: "Mod-b",
-        run: (view) => {
-          const { from, to } = view.state.selection.main;
-          if (from === to) return false;
-          const selected = view.state.doc.sliceString(from, to);
-          view.dispatch({
-            changes: { from, to, insert: `**${selected}**` },
-            selection: { anchor: from + 2, head: to + 2 },
-          });
-          return true;
-        },
+        run: (view) => wrapSelection(view, "**"),
       },
       {
         key: "Mod-i",
-        run: (view) => {
-          const { from, to } = view.state.selection.main;
-          if (from === to) return false;
-          const selected = view.state.doc.sliceString(from, to);
-          view.dispatch({
-            changes: { from, to, insert: `*${selected}*` },
-            selection: { anchor: from + 1, head: to + 1 },
-          });
-          return true;
-        },
+        run: (view) => wrapSelection(view, "*"),
       },
       {
         key: "Mod-k",
-        run: (view) => {
-          const { from, to } = view.state.selection.main;
-          const selected = view.state.doc.sliceString(from, to) || "text";
-          view.dispatch({
-            changes: { from, to, insert: `[${selected}](url)` },
-            selection: { anchor: from + selected.length + 3, head: from + selected.length + 6 },
-          });
-          return true;
-        },
+        run: (view) => insertLink(view),
       },
     ]);
 
@@ -322,6 +294,7 @@ export function CodeMirrorEditor() {
         ]),
         search({ top: true }),
         EditorView.lineWrapping,
+        wysiwyg(),
         imagePreview(),
         EditorView.domEventHandlers({
           paste(event, view) {
@@ -334,7 +307,6 @@ export function CodeMirrorEditor() {
           },
         }),
         updateListener,
-        themeComp.current.of(isDark ? EditorView.theme({}, { dark: true }) : EditorView.theme({})),
         highlightComp.current.of(syntaxHighlighting(isDark ? darkHighlight : lightHighlight)),
         focusComp.current.of(useEditorStore.getState().focusMode ? focusTheme : []),
         editorTheme,
@@ -374,14 +346,9 @@ export function CodeMirrorEditor() {
   useEffect(() => {
     if (viewRef.current) {
       viewRef.current.dispatch({
-        effects: [
-          themeComp.current.reconfigure(
-            isDark ? EditorView.theme({}, { dark: true }) : EditorView.theme({})
-          ),
-          highlightComp.current.reconfigure(
-            syntaxHighlighting(isDark ? darkHighlight : lightHighlight)
-          ),
-        ],
+        effects: highlightComp.current.reconfigure(
+          syntaxHighlighting(isDark ? darkHighlight : lightHighlight)
+        ),
       });
     }
   }, [isDark]);

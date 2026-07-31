@@ -1,13 +1,13 @@
-/* Markdown content rendering - Typora style */
+/* Markdown content rendering - Kimi style */
 
 .typora-content {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Noto Sans", Ubuntu, Cantarell, "Helvetica Neue", sans-serif, Arial, "PingFang SC", "Source Han Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC";
   color: var(--text-primary);
-  line-height: 1.75;
+  line-height: 1.8;
   font-size: 16px;
   max-width: 760px;
   margin: 0 auto;
-  padding: 48px 64px;
+  padding: 56px 64px;
   user-select: text;
   -webkit-user-select: text;
 }
@@ -26,35 +26,38 @@
 .typora-content h4,
 .typora-content h5,
 .typora-content h6 {
-  font-weight: 600;
-  line-height: 1.25;
-  margin-top: 1.5em;
+  font-weight: 650;
+  line-height: 1.4;
+  margin-top: 1.6em;
   margin-bottom: 0.5em;
+  letter-spacing: -0.01em;
 }
 
 .typora-content h1 {
-  font-size: 2em;
-  margin-top: 0.8em;
-  margin-bottom: 0.4em;
+  font-size: 22px;
+  margin-top: 0.4em;
+  margin-bottom: 0.5em;
   border-bottom: 1px solid var(--border-secondary);
   padding-bottom: 0.4em;
   font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .typora-content h2 {
-  font-size: 1.5em;
+  font-size: 20px;
   border-bottom: 1px solid var(--border-secondary);
   padding-bottom: 0.3em;
   font-weight: 700;
+  letter-spacing: -0.015em;
 }
 
-.typora-content h3 { font-size: 1.25em; }
-.typora-content h4 { font-size: 1em; }
-.typora-content h5 { font-size: 0.875em; }
-.typora-content h6 { font-size: 0.85em; color: var(--text-secondary); }
+.typora-content h3 { font-size: 18px; }
+.typora-content h4 { font-size: 16px; }
+.typora-content h5 { font-size: 15px; }
+.typora-content h6 { font-size: 14px; color: var(--text-secondary); }
 
 .typora-content p {
-  margin: 0.8em 0;
+  margin: 0.9em 0;
 }
 
 .typora-content a {
@@ -68,37 +71,36 @@
   text-decoration: underline;
 }
 
-.typora-content strong { font-weight: 600; }
+.typora-content strong { font-weight: 650; }
 .typora-content em { font-style: italic; }
 .typora-content del { text-decoration: line-through; }
 
 .typora-content ul,
 .typora-content ol {
-  padding-left: 1.8em;
-  margin: 0.8em 0;
+  padding-left: 1.6em;
+  margin: 0.9em 0;
 }
 
-.typora-content li { margin: 0.3em 0; }
+.typora-content li { margin: 0.35em 0; }
 .typora-content li > ul,
 .typora-content li > ol { margin: 0.2em 0; }
 
 .typora-content blockquote {
-  border-left: 3px solid var(--accent);
-  padding: 0.6em 1.2em;
-  margin: 1em 0;
+  border-left: 3px solid var(--border-primary);
+  padding: 0.2em 1.2em;
+  margin: 1.2em 0;
   color: var(--text-secondary);
-  background: var(--accent-light);
-  border-radius: 0 10px 10px 0;
+  border-radius: 0 8px 8px 0;
 }
 
-.typora-content blockquote p { margin: 0.3em 0; }
+.typora-content blockquote p { margin: 0.4em 0; }
 
 .typora-content code {
   font-family: "SF Mono", "Fira Code", "JetBrains Mono", Menlo, Consolas, monospace;
   font-size: 0.875em;
   background: var(--code-bg);
   border: 1px solid var(--code-border);
-  border-radius: 4px;
+  border-radius: 5px;
   padding: 0.1em 0.4em;
   margin: 0 1px;
 }
@@ -106,13 +108,12 @@
 .typora-content pre {
   background: var(--code-bg);
   border: 1px solid var(--code-border);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   padding: 18px 22px;
   overflow-x: auto;
-  margin: 1em 0;
+  margin: 1.2em 0;
   font-size: 0.875em;
-  line-height: 1.6;
-  box-shadow: var(--shadow-sm);
+  line-height: 1.65;
 }
 
 .typora-content pre code {
@@ -127,9 +128,10 @@
 .typora-content table {
   border-collapse: collapse;
   width: 100%;
-  margin: 1em 0;
+  margin: 1.2em 0;
   overflow-x: auto;
   display: block;
+  font-size: 0.95em;
 }
 
 .typora-content thead {
@@ -144,19 +146,19 @@
 }
 
 .typora-content tr:nth-child(2n) {
-  background: var(--code-bg);
+  background: var(--bg-secondary);
 }
 
 .typora-content img {
   max-width: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   margin: 0.5em 0;
 }
 
 .typora-content hr {
   border: none;
   border-top: 1px solid var(--border-primary);
-  margin: 2em 0;
+  margin: 2.4em 0;
 }
 
 .typora-content input[type="checkbox"] {

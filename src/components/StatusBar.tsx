@@ -6,8 +6,6 @@ export function StatusBar() {
     isDirty,
     currentFileName,
     currentFilePath,
-    editorMode,
-    setEditorMode,
     cursorLine,
     cursorColumn,
     wordCount,
@@ -49,79 +47,15 @@ export function StatusBar() {
         {isDirty ? currentFileName : currentFilePath ? tr.saved : tr.unsaved}
       </span>
 
-      {/* Center: cursor + counts */}
+      {/* Right: cursor + counts */}
       <span
         className="flex items-center"
         style={{ gap: 14, color: "var(--text-tertiary)" }}
       >
-        {editorMode === "source" && (
-          <span>Ln {cursorLine}, Col {cursorColumn}</span>
-        )}
+        <span>Ln {cursorLine}, Col {cursorColumn}</span>
         <span>{wordCount} {tr.words}</span>
         <span>{charCount} {tr.chars}</span>
       </span>
-
-      {/* Right: mode toggle */}
-      <div
-        className="flex items-center"
-        style={{
-          background: "var(--bg-secondary)",
-          borderRadius: 6,
-          padding: 2,
-          gap: 1,
-        }}
-      >
-        <button
-          onClick={() => setEditorMode("source")}
-          title={tr.edit}
-          style={{
-            width: 22,
-            height: 18,
-            borderRadius: 4,
-            border: "none",
-            background: editorMode === "source" ? "var(--bg-elevated)" : "transparent",
-            color: editorMode === "source" ? "var(--text-primary)" : "var(--text-tertiary)",
-            cursor: "pointer",
-            boxShadow: editorMode === "source" ? "var(--shadow-sm)" : "none",
-            transition: "all 150ms ease",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 0,
-            lineHeight: 0,
-          }}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 20h9"/>
-            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-          </svg>
-        </button>
-        <button
-          onClick={() => setEditorMode("preview")}
-          title={tr.preview}
-          style={{
-            width: 22,
-            height: 18,
-            borderRadius: 4,
-            border: "none",
-            background: editorMode === "preview" ? "var(--bg-elevated)" : "transparent",
-            color: editorMode === "preview" ? "var(--text-primary)" : "var(--text-tertiary)",
-            cursor: "pointer",
-            boxShadow: editorMode === "preview" ? "var(--shadow-sm)" : "none",
-            transition: "all 150ms ease",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 0,
-            lineHeight: 0,
-          }}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
-        </button>
-      </div>
     </div>
   );
 }
