@@ -1,10 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { saveAiConfig, testAiConnection, type AiProvider } from "../lib/ai";
 import { useAiStore } from "../store/aiStore";
+import { Select, SelectItem } from "./ui/Select";
 
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
+}
+
+function EyeIcon({ open }: { open: boolean }) {
+  return open ? (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+      <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+      <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+      <line x1="2" y1="2" x2="22" y2="22" />
+    </svg>
+  );
 }
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
@@ -13,8 +30,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [provider, setProvider] = useState<AiProvider>(config.provider);
   const [baseUrl, setBaseUrl] = useState(config.baseUrl);
   const [model, setModel] = useState(config.model);
-  const [apiKey, setApiKey] = useState("");
-  const [clearApiKey, setClearApiKey] = useState(false);
+  const [apiKey, setApiKey] = useState(config.apiKey);
+  const [showKey, setShowKey] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -24,12 +41,12 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     setProvider(config.provider);
     setBaseUrl(config.baseUrl);
     setModel(config.model);
-    setApiKey("");
-    setClearApiKey(false);
+    setApiKey(config.apiKey);
+    setShowKey(false);
     setMessage(null);
     setQuery("");
     window.setTimeout(() => baseUrlRef.current?.focus(), 0);
-  }, [open, config.provider, config.baseUrl, config.model]);
+  }, [open, config.provider, config.baseUrl, config.model, config.apiKey]);
 
   const showAiSettings = useMemo(() => {
     const keywords = "ai 服务 模型 api key base url openai anthropic";
@@ -42,8 +59,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     provider,
     baseUrl: baseUrl.trim(),
     model: model.trim(),
-    apiKey: apiKey.trim() || undefined,
-    clearApiKey,
+    apiKey: apiKey.trim(),
   };
 
   const validate = () => {
@@ -51,7 +67,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       setMessage("请填写 Base URL 和模型名称。");
       return false;
     }
-    if (!config.apiKeyConfigured && !input.apiKey) {
+    if (!input.apiKey) {
       setMessage("请填写 API Key。");
       return false;
     }
@@ -88,10 +104,14 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   };
 
   return (
-    <div className="settings-overlay" onKeyDown={(event) => event.key === "Escape" && onClose()}>
+    <div
+      className="settings-overlay"
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+      onKeyDown={(event) => event.key === "Escape" && onClose()}
+    >
       <section className="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+        <button type="button" className="settings-close-button" onClick={onClose} aria-label="关闭设置">✕</button>
         <aside className="settings-sidebar">
-          <button type="button" className="settings-back-button" onClick={onClose}>← <span>返回应用</span></button>
           <label className="settings-search">
             <span aria-hidden="true">⌕</span>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索设置..." aria-label="搜索设置" />
@@ -124,8 +144,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       aria-checked={config.enabled}
                       className="settings-switch"
                       onClick={() => {
-                        if (!config.apiKeyConfigured) {
-                          setMessage("请先保存 API Key，再开启 AI 续写。");
+                        if (!config.apiKey) {
+                          setMessage("请先在下方填写并保存 API Key，再开启 AI 续写。");
                           return;
                         }
                         config.setEnabled(!config.enabled);
@@ -137,13 +157,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               <section className="settings-group" aria-labelledby="model-service-title">
                 <h2 id="model-service-title">模型服务</h2>
                 <div className="settings-card">
-                  <label className="settings-row">
+                  <div className="settings-row">
                     <span className="settings-row-copy"><strong>API 格式</strong><small>选择模型服务使用的请求协议</small></span>
-                    <select value={provider} onChange={(event) => setProvider(event.target.value as AiProvider)}>
-                      <option value="openai">OpenAI Compatible</option>
-                      <option value="anthropic">Anthropic</option>
-                    </select>
-                  </label>
+                    <Select value={provider} onValueChange={(value) => setProvider(value as AiProvider)}>
+                      <SelectItem value="openai">OpenAI Compatible</SelectItem>
+                      <SelectItem value="anthropic">Anthropic</SelectItem>
+                    </Select>
+                  </div>
                   <label className="settings-row">
                     <span className="settings-row-copy"><strong>Base URL</strong><small>例如：{provider === "anthropic" ? "https://api.anthropic.com" : "https://api.openai.com/v1"}</small></span>
                     <input ref={baseUrlRef} value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com" spellCheck={false} />
@@ -152,16 +172,28 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     <span className="settings-row-copy"><strong>模型</strong><small>服务商提供的模型名称</small></span>
                     <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="模型名称" spellCheck={false} />
                   </label>
-                  <label className="settings-row">
-                    <span className="settings-row-copy"><strong>API Key</strong><small>{config.apiKeyConfigured && !clearApiKey ? "已配置，留空保持不变" : "只保存在系统钥匙串中"}</small></span>
-                    <input type="password" value={apiKey} onChange={(event) => { setApiKey(event.target.value); setClearApiKey(false); }} placeholder={config.apiKeyConfigured ? "已配置" : "粘贴 API Key"} autoComplete="off" />
-                  </label>
-                  {config.apiKeyConfigured && (
-                    <div className="settings-row settings-row-action">
-                      <span className="settings-row-copy"><strong>已保存的 Key</strong><small>清除后需要重新配置 API Key</small></span>
-                      <button type="button" className="secondary-button" onClick={() => setClearApiKey((value) => !value)}>{clearApiKey ? "保留" : "清除"}</button>
+                  <div className="settings-row">
+                    <span className="settings-row-copy"><strong>API Key</strong><small>保存在本地配置文件，点击眼睛可查看</small></span>
+                    <div className="settings-key-field">
+                      <input
+                        type={showKey ? "text" : "password"}
+                        value={apiKey}
+                        onChange={(event) => setApiKey(event.target.value)}
+                        placeholder="粘贴 API Key"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <button
+                        type="button"
+                        className="settings-eye-button"
+                        onClick={() => setShowKey((value) => !value)}
+                        aria-label={showKey ? "隐藏 API Key" : "显示 API Key"}
+                        title={showKey ? "隐藏" : "显示"}
+                      >
+                        <EyeIcon open={showKey} />
+                      </button>
                     </div>
-                  )}
+                  </div>
                 </div>
               </section>
 

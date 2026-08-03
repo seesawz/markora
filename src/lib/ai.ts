@@ -7,15 +7,14 @@ export interface AiConfig {
   provider: AiProvider;
   baseUrl: string;
   model: string;
-  apiKeyConfigured: boolean;
+  apiKey: string;
 }
 
 export interface SaveAiConfigInput {
   provider: AiProvider;
   baseUrl: string;
   model: string;
-  apiKey?: string;
-  clearApiKey: boolean;
+  apiKey: string;
 }
 
 export interface CompleteAiInput {

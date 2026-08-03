@@ -16,17 +16,23 @@ const defaultConfig: AiConfig = {
   provider: "openai",
   baseUrl: "https://api.openai.com/v1",
   model: "gpt-4o-mini",
-  apiKeyConfigured: false,
+  apiKey: "",
 };
+
+// ponytail: AI 续写开关状态持久化到 localStorage（重启后保持）
+const AI_ENABLED_KEY = "markora:aiEnabled";
 
 export const useAiStore = create<AiState>((set) => ({
   ...defaultConfig,
-  enabled: false,
+  enabled: localStorage.getItem(AI_ENABLED_KEY) === "true",
   isGenerating: false,
   error: null,
 
   setConfig: (config) => set(config),
-  setEnabled: (enabled) => set({ enabled, error: null }),
+  setEnabled: (enabled) => {
+    localStorage.setItem(AI_ENABLED_KEY, String(enabled));
+    set({ enabled, error: null });
+  },
   setGenerating: (isGenerating) => set({ isGenerating }),
   setError: (error) => set({ error }),
   loadConfig: async () => {

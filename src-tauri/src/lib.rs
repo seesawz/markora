@@ -1,7 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use keyring::Entry;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -30,6 +29,8 @@ struct AiConfigFile {
     provider: String,
     base_url: String,
     model: String,
+    #[serde(default)]
+    api_key: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -38,7 +39,7 @@ struct AiConfigResponse {
     provider: String,
     base_url: String,
     model: String,
-    api_key_configured: bool,
+    api_key: String,
 }
 
 #[derive(Deserialize)]
@@ -48,7 +49,6 @@ struct AiConfigRequest {
     base_url: String,
     model: String,
     api_key: Option<String>,
-    clear_api_key: bool,
 }
 
 #[derive(Deserialize)]
@@ -70,6 +70,7 @@ fn default_ai_config() -> AiConfigFile {
         provider: "openai".to_string(),
         base_url: "https://api.openai.com/v1".to_string(),
         model: "gpt-4o-mini".to_string(),
+        api_key: String::new(),
     }
 }
 
@@ -82,22 +83,23 @@ fn read_ai_config(app: &tauri::AppHandle) -> Result<AiConfigFile, String> {
     serde_json::from_str(&raw).map_err(|e| format!("AI 配置损坏：{}", e))
 }
 
-fn api_key_entry() -> Result<Entry, String> {
-    Entry::new("com.lionaillen.markora", "ai-api-key").map_err(|e| e.to_string())
-}
-
-fn stored_api_key() -> Result<String, String> {
-    api_key_entry()?
-        .get_password()
-        .map_err(|_| "请先在 AI 设置中配置 API Key".to_string())
-}
-
 fn config_response(config: AiConfigFile) -> AiConfigResponse {
     AiConfigResponse {
         provider: config.provider,
         base_url: config.base_url,
         model: config.model,
-        api_key_configured: stored_api_key().is_ok(),
+        api_key: config.api_key,
+    }
+}
+
+// ponytail: API Key 改存 ai.json 明文（钥匙串在未公证应用上不可靠），空则报错
+fn config_api_key(app: &tauri::AppHandle) -> Result<String, String> {
+    let config = read_ai_config(app)?;
+    let key = config.api_key.trim();
+    if key.is_empty() {
+        Err("请先在 AI 设置中配置 API Key".to_string())
+    } else {
+        Ok(key.to_string())
     }
 }
 
@@ -116,17 +118,13 @@ fn save_ai_config(app: tauri::AppHandle, request: AiConfigRequest) -> Result<AiC
         return Err("Base URL 和模型名称不能为空".to_string());
     }
 
-    let entry = api_key_entry()?;
-    if request.clear_api_key {
-        entry.delete_credential().map_err(|e| e.to_string())?;
-    } else if let Some(api_key) = request.api_key.filter(|value| !value.trim().is_empty()) {
-        entry.set_password(api_key.trim()).map_err(|e| e.to_string())?;
-    }
-
+    // ponytail: API Key 直接写 ai.json，留空即清除
+    let api_key = request.api_key.unwrap_or_default().trim().to_string();
     let config = AiConfigFile {
         provider: provider.to_string(),
         base_url: request.base_url.trim_end_matches('/').to_string(),
         model: request.model.trim().to_string(),
+        api_key,
     };
     let path = ai_config_path(&app)?;
     if let Some(parent) = path.parent() {
@@ -160,12 +158,43 @@ fn endpoint(base_url: &str, provider: &str) -> Result<String, String> {
 
 fn extract_ai_text(provider: &str, raw: &str) -> Result<String, String> {
     let value: Value = serde_json::from_str(raw).map_err(|e| format!("AI 响应无法解析：{}", e))?;
-    let text = if provider == "anthropic" {
-        value["content"][0]["text"].as_str()
-    } else {
-        value["choices"][0]["message"]["content"].as_str()
-    };
-    text.map(str::to_string).filter(|value| !value.is_empty()).ok_or_else(|| "AI 返回了空内容".to_string())
+    let text = extract_content(&value, provider);
+    if !text.trim().is_empty() {
+        return Ok(text);
+    }
+    // ponytail: 取不到内容时附上原始响应片段,便于排查（模型名错误/格式不兼容等）
+    let detail = raw.chars().take(600).collect::<String>();
+    Err(format!("AI 返回了空内容，原始响应：{}", detail))
+}
+
+// content 可能是字符串、null、或内容块数组；推理模型可能把输出放在 reasoning_content
+fn extract_content(value: &Value, provider: &str) -> String {
+    if provider == "anthropic" {
+        if let Some(blocks) = value["content"].as_array() {
+            return blocks
+                .iter()
+                .filter_map(|b| b["text"].as_str())
+                .collect::<Vec<_>>()
+                .join("");
+        }
+        return value["content"].as_str().unwrap_or("").to_string();
+    }
+    let message = &value["choices"][0]["message"];
+    if let Some(s) = message["content"].as_str() {
+        return s.to_string();
+    }
+    if let Some(blocks) = message["content"].as_array() {
+        return blocks
+            .iter()
+            .filter_map(|b| b.get("text").and_then(|t| t.as_str()).or_else(|| b.as_str()))
+            .collect::<Vec<_>>()
+            .join("");
+    }
+    // 推理模型（DeepSeek-R1 等）content 为 null 时退回 reasoning_content
+    if let Some(s) = message["reasoning_content"].as_str() {
+        return s.to_string();
+    }
+    String::new()
 }
 
 async fn complete_ai_request(
@@ -192,6 +221,8 @@ async fn complete_ai_request(
         json!({
             "model": model,
             "max_tokens": 4096,
+            // ponytail: 默认关闭思考模式--推理模型(glm-5.2 等)开思考会慢 4-8 秒,续写场景不可用
+            "thinking": { "type": "disabled" },
             "messages": [{ "role": "user", "content": prompt }]
         })
     } else {
@@ -225,13 +256,15 @@ async fn complete_ai_request(
 }
 
 #[tauri::command]
-async fn test_ai_connection(request: AiConfigRequest) -> Result<(), String> {
+async fn test_ai_connection(app: tauri::AppHandle, request: AiConfigRequest) -> Result<(), String> {
     let api_key = request
         .api_key
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| value.trim().to_string())
-        .or_else(|| stored_api_key().ok())
-        .ok_or_else(|| "请先配置 API Key".to_string())?;
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string())
+        .map(Ok)
+        .unwrap_or_else(|| config_api_key(&app))?;
     complete_ai_request(
         &request.provider,
         &request.base_url,
@@ -249,7 +282,7 @@ async fn complete_ai(app: tauri::AppHandle, request: AiCompletionRequest) -> Res
     let provider = if request.provider.trim().is_empty() { config.provider } else { request.provider };
     let base_url = if request.base_url.trim().is_empty() { config.base_url } else { request.base_url };
     let model = if request.model.trim().is_empty() { config.model } else { request.model };
-    complete_ai_request(&provider, &base_url, &model, stored_api_key()?, &request.prompt).await
+    complete_ai_request(&provider, &base_url, &model, config_api_key(&app)?, &request.prompt).await
 }
 
 #[cfg(test)]
@@ -275,6 +308,18 @@ mod tests {
     }
 
     #[test]
+    fn extracts_openai_array_content() {
+        let raw = r#"{"choices":[{"message":{"content":[{"type":"text","text":"part-1"},{"type":"text","text":"part-2"}]}}]}"#;
+        assert_eq!(extract_ai_text("openai", raw).unwrap(), "part-1part-2");
+    }
+
+    #[test]
+    fn falls_back_to_reasoning_content() {
+        let raw = r#"{"choices":[{"message":{"content":null,"reasoning_content":"thoughts"}}]}"#;
+        assert_eq!(extract_ai_text("openai", raw).unwrap(), "thoughts");
+    }
+
+    #[test]
     fn extracts_anthropic_response_text() {
         let raw = r#"{"content":[{"type":"text","text":"generated"}]}"#;
         assert_eq!(extract_ai_text("anthropic", raw).unwrap(), "generated");
@@ -283,7 +328,9 @@ mod tests {
     #[test]
     fn rejects_empty_ai_response() {
         let raw = r#"{"choices":[{"message":{"content":""}}]}"#;
-        assert_eq!(extract_ai_text("openai", raw).unwrap_err(), "AI 返回了空内容");
+        let err = extract_ai_text("openai", raw).unwrap_err();
+        assert!(err.contains("AI 返回了空内容"), "unexpected error: {}", err);
+        assert!(err.contains("原始响应"), "should include raw body: {}", err);
     }
 }
 

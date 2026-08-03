@@ -29,7 +29,7 @@ describe("SettingsModal", () => {
       provider: "anthropic",
       baseUrl: "https://api.openai.com/v1",
       model: "gpt-4o-mini",
-      apiKeyConfigured: false,
+      apiKey: "",
       enabled: false,
       isGenerating: false,
       error: null,
@@ -38,12 +38,12 @@ describe("SettingsModal", () => {
       provider: "anthropic",
       baseUrl: "https://api.anthropic.com",
       model: "claude-3-5-sonnet",
-      apiKeyConfigured: true,
+      apiKey: "sk-test",
     });
     testAiConnectionMock.mockResolvedValue(undefined);
   });
 
-  it("focuses Base URL when opened and saves pasted provider settings", async () => {
+  it("focuses Base URL when opened and saves the provider settings", async () => {
     const onClose = vi.fn();
     render(<SettingsModal open onClose={onClose} />);
 
@@ -51,7 +51,6 @@ describe("SettingsModal", () => {
     await waitFor(() => expect(document.activeElement).toBe(baseUrl));
     const model = screen.getByDisplayValue("gpt-4o-mini");
     const apiKey = screen.getByPlaceholderText("粘贴 API Key");
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "anthropic" } });
     fireEvent.change(baseUrl, { target: { value: "https://api.anthropic.com" } });
     fireEvent.change(model, { target: { value: "claude-3-5-sonnet" } });
     fireEvent.change(apiKey, { target: { value: "sk-test" } });
@@ -63,7 +62,6 @@ describe("SettingsModal", () => {
       baseUrl: "https://api.anthropic.com",
       model: "claude-3-5-sonnet",
       apiKey: "sk-test",
-      clearApiKey: false,
     });
   });
 
@@ -98,7 +96,7 @@ describe("SettingsModal", () => {
   });
 
   it("enables inline completion after an API Key is configured", () => {
-    useAiStore.setState({ apiKeyConfigured: true });
+    useAiStore.setState({ apiKey: "sk-test" });
     render(<SettingsModal open onClose={vi.fn()} />);
 
     const toggle = screen.getByRole("switch", { name: "开启 AI 续写" });

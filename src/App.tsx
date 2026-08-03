@@ -281,7 +281,7 @@ export default function App() {
     const view = getEditorView();
     if (!view) return;
     const currentAi = useAiStore.getState();
-    if (!currentAi.apiKeyConfigured) {
+    if (!currentAi.apiKey) {
       currentAi.setError("请先在 AI 设置中配置 API Key。");
       setSettingsOpen(true);
       return;

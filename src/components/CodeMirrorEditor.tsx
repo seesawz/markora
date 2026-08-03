@@ -130,11 +130,16 @@ const editorTheme = EditorView.theme({
   ".cm-scroller": {
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Noto Sans", Ubuntu, Cantarell, "Helvetica Neue", sans-serif, Arial, "PingFang SC", "Source Han Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC"',
     lineHeight: "1.8",
-    padding: "56px 64px",
+    // ponytail: Kimi 网页聊天式布局--纵向留白交给 scroller,横向居中交给 content
+    padding: "80px 0 140px",
   },
   ".cm-content": {
     caretColor: "var(--accent)",
     userSelect: "text",
+    // 居中阅读栏:与 .typora-content 同宽(760px),两侧自动留白
+    maxWidth: "760px",
+    margin: "0 auto",
+    padding: "0 48px",
   },
   ".cm-gutters": {
     backgroundColor: "transparent",
@@ -238,8 +243,9 @@ export function CodeMirrorEditor() {
         setContent(update.state.doc.toString());
         clearAiGhost(update.view);
         if (completionTimer.current !== null) window.clearTimeout(completionTimer.current);
-        const requestId = ++completionRequestId.current;
+        // ponytail: 仅在实际调度新请求时递增 id;生成期间(isGenerating)的用户输入不应作废在途请求(推理模型耗时长)
         if (useAiStore.getState().enabled && !useAiStore.getState().isGenerating) {
+          const requestId = ++completionRequestId.current;
           completionTimer.current = window.setTimeout(() => {
             void requestInlineCompletion(update.view, () => requestId === completionRequestId.current);
           }, 800);
@@ -411,7 +417,7 @@ async function requestInlineCompletion(
   isCurrent: () => boolean,
 ): Promise<void> {
   const ai = useAiStore.getState();
-  if (!ai.enabled || !ai.apiKeyConfigured || ai.isGenerating) return;
+  if (!ai.enabled || !ai.apiKey || ai.isGenerating) return;
   if (view.state.selection.main.from !== view.state.selection.main.to) return;
 
   const source = view.state.doc.toString();
@@ -425,9 +431,19 @@ async function requestInlineCompletion(
       model: ai.model,
       prompt: buildInlinePrompt(view),
     });
-    if (!isCurrent() || view.state.doc.toString() !== source) return;
+    if (!isCurrent()) return;
+    // ponytail: 推理模型耗时长,生成期间用户可能继续输入。若仅追加(光标前内容未变),仍在当前光标显示续写
+    const currentDoc = view.state.doc.toString();
+    let ghostFrom = from;
+    if (currentDoc !== source) {
+      if (currentDoc.startsWith(source) && view.state.selection.main.head >= from) {
+        ghostFrom = view.state.selection.main.head;
+      } else {
+        return; // 光标前内容被改动,丢弃过期的续写
+      }
+    }
     const text = normalizeAiText(raw);
-    if (text) showAiGhost(view, from, text);
+    if (text) showAiGhost(view, ghostFrom, text);
   } catch (error) {
     ai.setError(String(error));
   } finally {
