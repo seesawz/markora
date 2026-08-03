@@ -1,27 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { saveAiConfig, testAiConnection, type AiProvider } from "../lib/ai";
-import { useAiStore } from "../store/aiStore";
-import { Select, SelectItem } from "./ui/Select";
+import { saveAiConfig, testAiConnection, type AiProvider } from "@/lib/ai";
+import { useAiStore } from "@/store/aiStore";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Eye, EyeOff } from "lucide-react";
 
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
-}
-
-function EyeIcon({ open }: { open: boolean }) {
-  return open ? (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  ) : (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-      <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-      <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-      <line x1="2" y1="2" x2="22" y2="22" />
-    </svg>
-  );
 }
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
@@ -137,20 +125,17 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 <div className="settings-card">
                   <div className="settings-row">
                     <span className="settings-row-copy"><strong>自动续写</strong><small>停止输入 0.8 秒后生成建议，按 Tab 接受</small></span>
-                    <button
-                      type="button"
-                      role="switch"
+                    <Switch
                       aria-label="开启 AI 续写"
-                      aria-checked={config.enabled}
-                      className="settings-switch"
-                      onClick={() => {
-                        if (!config.apiKey) {
+                      checked={config.enabled}
+                      onCheckedChange={(checked) => {
+                        if (checked && !config.apiKey) {
                           setMessage("请先在下方填写并保存 API Key，再开启 AI 续写。");
                           return;
                         }
-                        config.setEnabled(!config.enabled);
+                        config.setEnabled(checked);
                       }}
-                    ><span /></button>
+                    />
                   </div>
                 </div>
               </section>
@@ -160,37 +145,43 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   <div className="settings-row">
                     <span className="settings-row-copy"><strong>API 格式</strong><small>选择模型服务使用的请求协议</small></span>
                     <Select value={provider} onValueChange={(value) => setProvider(value as AiProvider)}>
-                      <SelectItem value="openai">OpenAI Compatible</SelectItem>
-                      <SelectItem value="anthropic">Anthropic</SelectItem>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="openai">OpenAI Compatible</SelectItem>
+                        <SelectItem value="anthropic">Anthropic</SelectItem>
+                      </SelectContent>
                     </Select>
                   </div>
                   <label className="settings-row">
                     <span className="settings-row-copy"><strong>Base URL</strong><small>例如：{provider === "anthropic" ? "https://api.anthropic.com" : "https://api.openai.com/v1"}</small></span>
-                    <input ref={baseUrlRef} value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com" spellCheck={false} />
+                    <Input ref={baseUrlRef} value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com" spellCheck={false} className="w-[220px]" />
                   </label>
                   <label className="settings-row">
                     <span className="settings-row-copy"><strong>模型</strong><small>服务商提供的模型名称</small></span>
-                    <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="模型名称" spellCheck={false} />
+                    <Input value={model} onChange={(event) => setModel(event.target.value)} placeholder="模型名称" spellCheck={false} className="w-[220px]" />
                   </label>
                   <div className="settings-row">
                     <span className="settings-row-copy"><strong>API Key</strong><small>保存在本地配置文件，点击眼睛可查看</small></span>
-                    <div className="settings-key-field">
-                      <input
+                    <div className="relative w-[220px]">
+                      <Input
                         type={showKey ? "text" : "password"}
                         value={apiKey}
                         onChange={(event) => setApiKey(event.target.value)}
                         placeholder="粘贴 API Key"
                         autoComplete="off"
                         spellCheck={false}
+                        className="pr-8"
                       />
                       <button
                         type="button"
-                        className="settings-eye-button"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 grid place-items-center h-6 w-6 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                         onClick={() => setShowKey((value) => !value)}
                         aria-label={showKey ? "隐藏 API Key" : "显示 API Key"}
                         title={showKey ? "隐藏" : "显示"}
                       >
-                        <EyeIcon open={showKey} />
+                        {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                       </button>
                     </div>
                   </div>
@@ -199,9 +190,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
               {message && <div className="settings-message" role="status">{message}</div>}
 
-              <footer className="settings-modal-actions">
-                <button type="button" className="secondary-button" onClick={() => void handleTest()} disabled={busy}>测试连接</button>
-                <button type="submit" className="primary-button" disabled={busy}>保存更改</button>
+              <footer className="flex justify-end gap-2 mt-5">
+                <Button type="button" variant="secondary" onClick={() => void handleTest()} disabled={busy}>测试连接</Button>
+                <Button type="submit" disabled={busy}>保存更改</Button>
               </footer>
             </form>
           ) : (

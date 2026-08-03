@@ -1,5 +1,32 @@
 @import "tailwindcss";
 
+/* ponytail: shadcn/ui 主题 token -- 通过 @theme inline 把 shadcn 工具类
+   直接映射到现有 Kimi CSS 变量,不 emitted 新变量,避免 --accent 等命名冲突 */
+@theme inline {
+  --color-background: var(--bg-primary);
+  --color-foreground: var(--text-primary);
+  --color-card: var(--bg-elevated);
+  --color-card-foreground: var(--text-primary);
+  --color-popover: var(--bg-elevated);
+  --color-popover-foreground: var(--text-primary);
+  --color-primary: var(--accent);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--bg-hover);
+  --color-secondary-foreground: var(--text-primary);
+  --color-muted: var(--bg-secondary);
+  --color-muted-foreground: var(--text-secondary);
+  --color-accent: var(--bg-active);
+  --color-accent-foreground: var(--text-primary);
+  --color-destructive: #d14343;
+  --color-destructive-foreground: #ffffff;
+  --color-border: var(--border-primary);
+  --color-input: var(--border-primary);
+  --color-ring: var(--accent);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
 :root {
   /* ponytail: Kimi 规范 -- 暖白基底 + 透明度分层 + KM Blue 品牌色 */
   --bg-primary: #fbfaf9;       /* --Bg-GroundPC 暖白 */
@@ -77,11 +104,8 @@
   --shadow-lg: 0 12px 32px #00000099;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* ponytail: 全局 reset 由 Tailwind v4 Preflight(@layer base)处理;
+   不要再写无层级的 *{margin/padding:0},会覆盖有层级的工具类(如 px-3) */
 
 html, body, #root {
   height: 100%;
@@ -214,6 +238,7 @@ body {
 }
 
 /* ponytail: Kimi 官网式设置弹窗--居中卡片 + 毛玻璃遮罩,紧凑克制比例 */
+/* ponytail: 设置弹窗 - shadcn 组件 + 12px 紧凑基准 */
 .settings-overlay {
   position: fixed;
   inset: 0;
@@ -230,29 +255,30 @@ body {
 .settings-modal {
   position: relative;
   display: flex;
-  width: min(920px, 100%);
-  max-height: min(680px, calc(100vh - 96px));
+  width: min(720px, 100%);
+  max-height: min(560px, calc(100vh - 96px));
   overflow: hidden;
   border: 0.5px solid var(--border-secondary);
-  border-radius: 20px;
+  border-radius: 16px;
   background: var(--bg-elevated);
   box-shadow: var(--shadow-lg);
+  font-size: 12px;
 }
 
 .settings-close-button {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 12px;
+  right: 12px;
   z-index: 5;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text-tertiary);
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
@@ -264,10 +290,10 @@ body {
 }
 
 .settings-sidebar {
-  width: 232px;
-  flex: 0 0 232px;
+  width: 196px;
+  flex: 0 0 196px;
   overflow-y: auto;
-  padding: 22px 14px;
+  padding: 18px 12px;
   border-right: 0.5px solid var(--border-secondary);
   background: var(--bg-secondary);
 }
@@ -276,14 +302,14 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 38px;
-  margin-bottom: 18px;
-  padding: 0 12px;
+  height: 32px;
+  margin-bottom: 16px;
+  padding: 0 10px;
   border: 0.5px solid var(--border-secondary);
-  border-radius: 10px;
+  border-radius: 6px;
   background: var(--bg-elevated);
   color: var(--text-tertiary);
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .settings-search input {
@@ -293,7 +319,7 @@ body {
   outline: 0;
   background: transparent;
   color: var(--text-primary);
-  font: 400 14px/20px inherit;
+  font: 400 12px/16px inherit;
 }
 
 .settings-search input::placeholder {
@@ -306,11 +332,11 @@ body {
 }
 
 .settings-navigation-title {
-  padding: 0 12px 8px;
+  padding: 0 10px 6px;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 18px;
+  line-height: 16px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -318,15 +344,15 @@ body {
 .settings-nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  min-height: 38px;
-  padding: 8px 12px;
+  min-height: 32px;
+  padding: 6px 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text-primary);
-  font: 500 14px/20px inherit;
+  font: 500 12px/16px inherit;
   text-align: left;
   cursor: pointer;
 }
@@ -337,17 +363,17 @@ body {
 
 .settings-nav-icon {
   display: inline-grid;
-  width: 18px;
+  width: 16px;
   place-items: center;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .settings-content {
   min-width: 0;
   flex: 1;
   overflow-y: auto;
-  padding: 36px 44px 32px;
+  padding: 28px 32px 24px;
   background: var(--bg-elevated);
 }
 
@@ -358,22 +384,22 @@ body {
 
 .settings-content h1 {
   color: var(--text-primary);
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 650;
-  line-height: 30px;
+  line-height: 22px;
   letter-spacing: -0.01em;
 }
 
 .settings-group {
-  margin-top: 28px;
+  margin-top: 20px;
 }
 
 .settings-group h2 {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 18px;
+  line-height: 16px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -381,19 +407,19 @@ body {
 .settings-card {
   overflow: hidden;
   border: 0.5px solid var(--border-secondary);
-  border-radius: 14px;
+  border-radius: 10px;
   background: var(--bg-elevated);
-  box-shadow: 0 1px 4px -1px #0000000a;
+  box-shadow: 0 1px 3px -1px #0000000a;
 }
 
 .settings-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  min-height: 58px;
+  gap: 16px;
+  min-height: 48px;
   margin: 0;
-  padding: 14px 18px;
+  padding: 10px 14px;
 }
 
 .settings-row + .settings-row {
@@ -402,109 +428,35 @@ body {
 
 .settings-row-copy {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
 .settings-row-copy strong {
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 20px;
+  line-height: 16px;
 }
 
 .settings-row-copy small {
   color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 16px;
-}
-
-.settings-row input,
-.settings-row select {
-  width: min(46%, 280px);
-  min-width: 180px;
-  min-height: 38px;
-  padding: 8px 12px;
-  border: 0.5px solid var(--border-primary);
-  border-radius: 8px;
-  outline: none;
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-  font: 400 13px/18px inherit;
-  transition: border-color .15s ease, box-shadow .15s ease;
-}
-
-.settings-row input:focus,
-.settings-row select:focus,
-.settings-search:focus-within {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-.settings-switch {
-  width: 44px;
-  height: 26px;
-  flex: 0 0 auto;
-  padding: 2px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--bg-active);
-  cursor: pointer;
-  transition: background-color .15s ease;
-}
-
-.settings-switch span {
-  display: block;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--bg-elevated);
-  box-shadow: 0 1px 3px #00000026;
-  transition: transform .15s ease;
-}
-
-.settings-switch[aria-checked="true"] {
-  background: var(--accent);
-}
-
-.settings-switch[aria-checked="true"] span {
-  transform: translateX(18px);
-}
-
-.settings-row-action .secondary-button {
-  min-width: 64px;
+  font-size: 11px;
+  line-height: 14px;
 }
 
 .settings-message {
-  margin-top: 14px;
+  margin-top: 12px;
   color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 18px;
-}
-
-.settings-modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 24px;
-}
-
-.secondary-button {
-  border-color: var(--border-primary);
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-}
-
-.secondary-button:hover:not(:disabled) {
-  background: var(--bg-active);
-  color: var(--text-primary);
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .settings-empty-state p {
-  margin-top: 10px;
+  margin-top: 8px;
   color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 @media (max-width: 720px) {
@@ -523,33 +475,19 @@ body {
   }
 
   .settings-sidebar {
-    width: 180px;
-    flex-basis: 180px;
-    padding: 18px 10px;
+    width: 160px;
+    flex-basis: 160px;
+    padding: 14px 10px;
   }
 
   .settings-content {
-    padding: 28px 22px;
-  }
-
-  .settings-content h1 {
-    font-size: 20px;
-    line-height: 28px;
-  }
-
-  .settings-group {
-    margin-top: 22px;
+    padding: 22px 18px;
   }
 
   .settings-row {
     align-items: stretch;
     flex-direction: column;
-    gap: 10px;
-  }
-
-  .settings-row input,
-  .settings-row select {
-    width: 100%;
+    gap: 8px;
   }
 }
 
@@ -649,138 +587,3 @@ body {
   white-space: nowrap;
 }
 
-/* ponytail: Radix Select — 项目组件库基调,Kimi 变量定制 */
-.ui-select-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: min(46%, 280px);
-  min-width: 180px;
-  min-height: 38px;
-  padding: 8px 12px;
-  border: 0.5px solid var(--border-primary);
-  border-radius: 8px;
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-  font: 400 13px/18px inherit;
-  cursor: pointer;
-  outline: none;
-  transition: border-color .15s ease, box-shadow .15s ease;
-}
-
-.ui-select-trigger:hover {
-  border-color: var(--text-quaternary);
-}
-
-.ui-select-trigger:focus-visible,
-.ui-select-trigger[data-state="open"] {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-.ui-select-chevron {
-  display: inline-grid;
-  place-items: center;
-  width: 14px;
-  color: var(--text-tertiary);
-  font-size: 16px;
-  line-height: 1;
-  transition: transform .15s ease;
-}
-
-.ui-select-trigger[data-state="open"] .ui-select-chevron {
-  transform: rotate(180deg);
-}
-
-.ui-select-content {
-  z-index: 30000;
-  min-width: var(--radix-select-trigger-width);
-  padding: 4px;
-  border: 0.5px solid var(--border-primary);
-  border-radius: 10px;
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-  animation: ui-select-in 120ms ease;
-}
-
-@keyframes ui-select-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.ui-select-viewport {
-  padding: 0;
-}
-
-.ui-select-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 7px 10px;
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 13px;
-  line-height: 18px;
-  cursor: pointer;
-  outline: none;
-}
-
-.ui-select-item[data-highlighted] {
-  background: var(--bg-active);
-}
-
-.ui-select-item[data-state="checked"] {
-  color: var(--accent);
-  font-weight: 500;
-}
-
-.ui-select-indicator {
-  display: inline-grid;
-  place-items: center;
-  width: 14px;
-  color: var(--accent);
-  font-size: 13px;
-}
-
-/* ponytail: API Key 字段 + 眼睛切换 */
-.settings-key-field {
-  position: relative;
-  flex: 0 0 auto;
-  width: min(46%, 280px);
-  min-width: 180px;
-}
-
-.settings-key-field input {
-  width: 100%;
-  padding-right: 34px;
-}
-
-.settings-eye-button {
-  position: absolute;
-  top: 50%;
-  right: 4px;
-  transform: translateY(-50%);
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
-}
-
-.settings-eye-button:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.settings-eye-button svg {
-  width: 15px;
-  height: 15px;
-}
