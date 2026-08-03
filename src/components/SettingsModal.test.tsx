@@ -97,6 +97,15 @@ describe("SettingsModal", () => {
     expect(screen.queryByRole("button", { name: "AI 服务" })).toBeNull();
   });
 
+  it("shows the AI page when searching for the completion feature by name", () => {
+    render(<SettingsModal open onClose={vi.fn()} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "搜索设置" }), { target: { value: "续写" } });
+
+    expect(screen.getByRole("button", { name: "AI 服务" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "未找到设置" })).toBeNull();
+  });
+
   it("enables inline completion after an API Key is configured", () => {
     useAiStore.setState({ apiKeyConfigured: true });
     render(<SettingsModal open onClose={vi.fn()} />);

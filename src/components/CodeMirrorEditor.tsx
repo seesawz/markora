@@ -35,8 +35,8 @@ import { tags } from "@lezer/highlight";
 import { useEditorStore } from "../store/editorStore";
 import { useAiStore } from "../store/aiStore";
 import { wrapSelection, insertLink } from "../lib/editorOps";
-import { buildInlinePrompt, completeAi, normalizeAiText } from "../lib/ai";
-import { aiGhostTextExtension, clearAiGhost, showAiGhost } from "../lib/aiCompletion";
+import { aiGhostTextExtension, clearAiGhost } from "../lib/aiCompletion";
+import { requestInlineCompletion } from "../lib/inlineCompletion";
 import { SearchPanel } from "./SearchPanel";
 import { imagePreview } from "./imagePreview";
 import { wysiwyg } from "./wysiwyg";
@@ -224,25 +224,33 @@ export function CodeMirrorEditor() {
 
   const isDark = theme === "dark";
 
-  // ponytail: expose view for outline jump-to-line
-  useEffect(() => {
-    (window as any).__cmView = viewRef.current;
-    return () => { delete (window as any).__cmView; };
-  }, [viewRef.current]);
-
+  // ponytail: expose view for outline jump-to-line + AI 命令；
+  // 在创建 editor 的 effect 里直接赋值，避免 [viewRef.current] 依赖（ref 变化不触发重渲染）
   useEffect(() => {
     if (!editorRef.current) return;
+
+    // 防抖调度内联续写；scheduleCompletion 把自己传给 requestInlineCompletion，
+    // 以便结果过期时由后者重新安排下一轮
+    const scheduleCompletion = (view: EditorView) => {
+      if (completionTimer.current !== null) window.clearTimeout(completionTimer.current);
+      const requestId = ++completionRequestId.current;
+      completionTimer.current = window.setTimeout(() => {
+        void requestInlineCompletion(view, () => requestId === completionRequestId.current, scheduleCompletion);
+      }, 800);
+    };
 
     const updateListener = EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         setContent(update.state.doc.toString());
         clearAiGhost(update.view);
-        if (completionTimer.current !== null) window.clearTimeout(completionTimer.current);
-        const requestId = ++completionRequestId.current;
-        if (useAiStore.getState().enabled && !useAiStore.getState().isGenerating) {
-          completionTimer.current = window.setTimeout(() => {
-            void requestInlineCompletion(update.view, () => requestId === completionRequestId.current);
-          }, 800);
+        const ai = useAiStore.getState();
+        if (ai.enabled && !ai.isGenerating) {
+          scheduleCompletion(update.view);
+        } else if (ai.isGenerating) {
+          // 请求进行中：作废当前请求，待其结束后由 reschedule 重新触发
+          completionRequestId.current += 1;
+        } else if (completionTimer.current !== null) {
+          window.clearTimeout(completionTimer.current);
         }
       } else if (update.selectionSet) {
         clearAiGhost(update.view);
@@ -335,10 +343,12 @@ export function CodeMirrorEditor() {
     });
 
     viewRef.current = view;
+    (window as any).__cmView = view;
 
     return () => {
       if (completionTimer.current !== null) window.clearTimeout(completionTimer.current);
       completionRequestId.current += 1;
+      delete (window as any).__cmView;
       view.destroy();
       viewRef.current = null;
     };
@@ -404,33 +414,4 @@ export function CodeMirrorEditor() {
       )}
     </div>
   );
-}
-
-async function requestInlineCompletion(
-  view: EditorView,
-  isCurrent: () => boolean,
-): Promise<void> {
-  const ai = useAiStore.getState();
-  if (!ai.enabled || !ai.apiKeyConfigured || ai.isGenerating) return;
-  if (view.state.selection.main.from !== view.state.selection.main.to) return;
-
-  const source = view.state.doc.toString();
-  const from = view.state.selection.main.head;
-  ai.setGenerating(true);
-  ai.setError(null);
-  try {
-    const raw = await completeAi({
-      provider: ai.provider,
-      baseUrl: ai.baseUrl,
-      model: ai.model,
-      prompt: buildInlinePrompt(view),
-    });
-    if (!isCurrent() || view.state.doc.toString() !== source) return;
-    const text = normalizeAiText(raw);
-    if (text) showAiGhost(view, from, text);
-  } catch (error) {
-    ai.setError(String(error));
-  } finally {
-    useAiStore.getState().setGenerating(false);
-  }
 }

@@ -32,8 +32,16 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   }, [open, config.provider, config.baseUrl, config.model]);
 
   const showAiSettings = useMemo(() => {
-    const keywords = "ai 服务 模型 api key base url openai anthropic";
-    return keywords.includes(query.trim().toLowerCase());
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    // 按关键词逐条匹配，避免在拼接字符串上做 substring 导致“续写”“model”等命中不了
+    const keywords = [
+      "ai", "ai 续写", "续写", "completion", "complete",
+      "服务", "service", "模型", "model", "api key", "api", "key",
+      "base url", "base", "url", "openai", "anthropic", "claude", "gpt",
+      "设置", "settings",
+    ];
+    return keywords.some((kw) => kw.includes(q));
   }, [query]);
 
   if (!open) return null;

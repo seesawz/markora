@@ -19,19 +19,24 @@ const defaultConfig: AiConfig = {
   apiKeyConfigured: false,
 };
 
-export const useAiStore = create<AiState>((set) => ({
+export const useAiStore = create<AiState>((set, get) => ({
   ...defaultConfig,
   enabled: false,
   isGenerating: false,
   error: null,
 
-  setConfig: (config) => set(config),
+  // 没有 API Key 时强制关闭续写，避免状态栏显示“开”却静默无反应
+  setConfig: (config) =>
+    set((state) => ({
+      ...config,
+      enabled: config.apiKeyConfigured ? state.enabled : false,
+    })),
   setEnabled: (enabled) => set({ enabled, error: null }),
   setGenerating: (isGenerating) => set({ isGenerating }),
   setError: (error) => set({ error }),
   loadConfig: async () => {
     const config = await getAiConfig();
-    set(config);
+    get().setConfig(config);
   },
 }));
 

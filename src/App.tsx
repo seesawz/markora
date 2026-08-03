@@ -278,7 +278,8 @@ export default function App() {
 
   const handleAiCommand = async (instruction: string) => {
     setAiCommandOpen(false);
-    const view = getEditorView();
+    // 直接取编辑器视图：此时指令输入框仍持有焦点，getEditorView() 会因文本输入守卫返回 null
+    const view = (window as any).__cmView as EditorView | null;
     if (!view) return;
     const currentAi = useAiStore.getState();
     if (!currentAi.apiKeyConfigured) {

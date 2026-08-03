@@ -16,7 +16,7 @@ export function StatusBar({ onOpenSettings }: StatusBarProps) {
     wordCount,
     charCount,
   } = useEditorStore();
-  const { enabled: aiEnabled, isGenerating, error: aiError, setEnabled } = useAiStore();
+  const { enabled: aiEnabled, isGenerating, error: aiError, apiKeyConfigured, setEnabled } = useAiStore();
 
   const tr = useT();
 
@@ -62,7 +62,14 @@ export function StatusBar({ onOpenSettings }: StatusBarProps) {
           type="button"
           className="statusbar-button"
           style={{ color: aiEnabled ? "var(--accent)" : "var(--text-tertiary)" }}
-          onClick={() => setEnabled(!aiEnabled)}
+          onClick={() => {
+            // 未配置 Key 时不能直接开启，引导去设置
+            if (!aiEnabled && !apiKeyConfigured) {
+              onOpenSettings();
+              return;
+            }
+            setEnabled(!aiEnabled);
+          }}
           title="开启或关闭 AI 续写"
         >
           {isGenerating ? "AI 生成中…" : aiEnabled ? "AI 续写：开" : "AI 续写：关"}
