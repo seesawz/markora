@@ -13,15 +13,29 @@ import { renderMarkdown, resolveLocalImages } from "./lib/markdown";
 import { wrapSelection, insertLink } from "./lib/editorOps";
 import { t } from "./lib/i18n";
 import { rebuildMenu } from "./lib/menu";
+import { buildCommandPrompt, completeAi, normalizeAiText } from "./lib/ai";
+import { getSelectedText, getTextInputPasteTarget, insertTextAtSelection, trackTextInputFocus } from "./lib/inputOps";
+import { useAiStore } from "./store/aiStore";
+import { AiCommandModal } from "./components/AiCommandModal";
+import { SettingsModal } from "./components/SettingsModal";
 import typoraCss from "./styles/typora.css?raw";
 
 function getEditorView(): EditorView | null {
+  if (getTextInputPasteTarget()) return null;
   return (window as any).__cmView ?? null;
 }
 
 // --- Reusable editor operations ---
 
 async function doCopy(): Promise<void> {
+  const input = getTextInputPasteTarget();
+  if (input) {
+    const text = getSelectedText(input);
+    if (text) {
+      try { await writeText(text); } catch (e) { console.error(e); }
+    }
+    return;
+  }
   const view = getEditorView();
   if (view) {
     const { from, to } = view.state.selection.main;
@@ -34,6 +48,17 @@ async function doCopy(): Promise<void> {
 }
 
 async function doCut(): Promise<void> {
+  const input = getTextInputPasteTarget();
+  if (input) {
+    const text = getSelectedText(input);
+    if (text) {
+      try {
+        await writeText(text);
+        insertTextAtSelection(input, "");
+      } catch (e) { console.error(e); }
+    }
+    return;
+  }
   const view = getEditorView();
   if (view) {
     const { from, to } = view.state.selection.main;
@@ -48,6 +73,14 @@ async function doCut(): Promise<void> {
 }
 
 async function doPaste(): Promise<void> {
+  const input = getTextInputPasteTarget();
+  if (input) {
+    try {
+      insertTextAtSelection(input, await readText());
+      input.focus();
+    } catch (e) { console.error(e); }
+    return;
+  }
   const view = getEditorView();
   if (view) {
     // ponytail: 先尝试剪贴板图片，没有再退回文本
@@ -230,10 +263,57 @@ async function openFileFromPath(path: string): Promise<void> {
 export default function App() {
   const { theme, isDirty } = useEditorStore();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aiCommandOpen, setAiCommandOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
+
+  useEffect(() => {
+    useAiStore.getState().loadConfig().catch((error) => {
+      useAiStore.getState().setError(String(error));
+    });
+  }, []);
+
+  const handleAiCommand = async (instruction: string) => {
+    setAiCommandOpen(false);
+    const view = getEditorView();
+    if (!view) return;
+    const currentAi = useAiStore.getState();
+    if (!currentAi.apiKeyConfigured) {
+      currentAi.setError("请先在 AI 设置中配置 API Key。");
+      setSettingsOpen(true);
+      return;
+    }
+
+    const { from, to } = view.state.selection.main;
+    const source = view.state.doc.toString();
+    currentAi.setGenerating(true);
+    currentAi.setError(null);
+    try {
+      const raw = await completeAi({
+        provider: currentAi.provider,
+        baseUrl: currentAi.baseUrl,
+        model: currentAi.model,
+        prompt: buildCommandPrompt(view, instruction),
+      });
+      if (view.state.doc.toString() !== source) {
+        throw new Error("文档在生成期间发生了变化，请重试。");
+      }
+      const text = normalizeAiText(raw);
+      if (!text) throw new Error("AI 返回了空内容。");
+      view.dispatch({
+        changes: { from, to, insert: text },
+        selection: { anchor: from + text.length },
+      });
+      view.focus();
+    } catch (error) {
+      currentAi.setError(String(error));
+    } finally {
+      useAiStore.getState().setGenerating(false);
+    }
+  };
 
   // Restore last session (file + UI prefs), build native menu, then persist on change
   useEffect(() => {
@@ -289,14 +369,29 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const cmd = e.metaKey || e.ctrlKey;
+      if (getTextInputPasteTarget()) return;
+      if (cmd && e.key === ",") {
+        e.preventDefault();
+        setSettingsOpen(true);
+        return;
+      }
+      if (cmd && e.shiftKey && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        setAiCommandOpen(true);
+        return;
+      }
       if (cmd && e.key === "s") { e.preventDefault(); saveImpl(); }
     };
     document.addEventListener("keydown", onKey);
+    const trackFocus = (event: FocusEvent) => trackTextInputFocus(event.target);
+    document.addEventListener("focusin", trackFocus, true);
 
     // shared handler for native menu events (from Rust menu or JS-rebuilt menu)
     const handleMenuId = async (id: string) => {
       const store = useEditorStore.getState();
       switch (id) {
+        case "open_settings": setSettingsOpen(true); break;
+        case "ai_command": setAiCommandOpen(true); break;
         case "new_file": {
           if (!(await confirmDiscardIfDirty())) break;
           const selected = await save({
@@ -368,6 +463,7 @@ export default function App() {
 
     return () => {
       document.removeEventListener("keydown", onKey);
+      document.removeEventListener("focusin", trackFocus, true);
       window.removeEventListener("native-menu", onNativeMenu);
       unlisten.then((fn) => fn());
     };
@@ -466,7 +562,9 @@ export default function App() {
           )}
         </div>
       </div>
-      <StatusBar />
+      <StatusBar
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}
@@ -476,6 +574,12 @@ export default function App() {
           onClose={() => setContextMenu(null)}
         />
       )}
+      <AiCommandModal
+        open={aiCommandOpen}
+        onClose={() => setAiCommandOpen(false)}
+        onSubmit={(instruction) => { void handleAiCommand(instruction); }}
+      />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

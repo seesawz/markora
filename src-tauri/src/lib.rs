@@ -1,6 +1,10 @@
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use keyring::Entry;
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use tauri::{Emitter, Manager, WindowEvent};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 use tauri::RunEvent;
@@ -18,6 +22,269 @@ fn write_file_content(path: &str, content: &str) -> Result<(), String> {
 #[tauri::command]
 fn create_new_file(path: &str) -> Result<(), String> {
     fs::write(path, "").map_err(|e| e.to_string())
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AiConfigFile {
+    provider: String,
+    base_url: String,
+    model: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AiConfigResponse {
+    provider: String,
+    base_url: String,
+    model: String,
+    api_key_configured: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AiConfigRequest {
+    provider: String,
+    base_url: String,
+    model: String,
+    api_key: Option<String>,
+    clear_api_key: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AiCompletionRequest {
+    provider: String,
+    base_url: String,
+    model: String,
+    prompt: String,
+}
+
+fn ai_config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    Ok(dir.join("ai.json"))
+}
+
+fn default_ai_config() -> AiConfigFile {
+    AiConfigFile {
+        provider: "openai".to_string(),
+        base_url: "https://api.openai.com/v1".to_string(),
+        model: "gpt-4o-mini".to_string(),
+    }
+}
+
+fn read_ai_config(app: &tauri::AppHandle) -> Result<AiConfigFile, String> {
+    let path = ai_config_path(app)?;
+    if !path.exists() {
+        return Ok(default_ai_config());
+    }
+    let raw = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&raw).map_err(|e| format!("AI 配置损坏：{}", e))
+}
+
+fn api_key_entry() -> Result<Entry, String> {
+    Entry::new("com.lionaillen.markora", "ai-api-key").map_err(|e| e.to_string())
+}
+
+fn stored_api_key() -> Result<String, String> {
+    api_key_entry()?
+        .get_password()
+        .map_err(|_| "请先在 AI 设置中配置 API Key".to_string())
+}
+
+fn config_response(config: AiConfigFile) -> AiConfigResponse {
+    AiConfigResponse {
+        provider: config.provider,
+        base_url: config.base_url,
+        model: config.model,
+        api_key_configured: stored_api_key().is_ok(),
+    }
+}
+
+#[tauri::command]
+fn get_ai_config(app: tauri::AppHandle) -> Result<AiConfigResponse, String> {
+    Ok(config_response(read_ai_config(&app)?))
+}
+
+#[tauri::command]
+fn save_ai_config(app: tauri::AppHandle, request: AiConfigRequest) -> Result<AiConfigResponse, String> {
+    let provider = request.provider.trim();
+    if provider != "openai" && provider != "anthropic" {
+        return Err("不支持的 API 格式".to_string());
+    }
+    if request.base_url.trim().is_empty() || request.model.trim().is_empty() {
+        return Err("Base URL 和模型名称不能为空".to_string());
+    }
+
+    let entry = api_key_entry()?;
+    if request.clear_api_key {
+        entry.delete_credential().map_err(|e| e.to_string())?;
+    } else if let Some(api_key) = request.api_key.filter(|value| !value.trim().is_empty()) {
+        entry.set_password(api_key.trim()).map_err(|e| e.to_string())?;
+    }
+
+    let config = AiConfigFile {
+        provider: provider.to_string(),
+        base_url: request.base_url.trim_end_matches('/').to_string(),
+        model: request.model.trim().to_string(),
+    };
+    let path = ai_config_path(&app)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let raw = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
+    fs::write(path, raw).map_err(|e| e.to_string())?;
+    Ok(config_response(config))
+}
+
+fn endpoint(base_url: &str, provider: &str) -> Result<String, String> {
+    let base = base_url.trim_end_matches('/');
+    if base.is_empty() {
+        return Err("Base URL 不能为空".to_string());
+    }
+    if provider == "anthropic" {
+        return Ok(if base.ends_with("/messages") {
+            base.to_string()
+        } else if base.ends_with("/v1") {
+            format!("{}/messages", base)
+        } else {
+            format!("{}/v1/messages", base)
+        });
+    }
+    Ok(if base.ends_with("/chat/completions") {
+        base.to_string()
+    } else {
+        format!("{}/chat/completions", base)
+    })
+}
+
+fn extract_ai_text(provider: &str, raw: &str) -> Result<String, String> {
+    let value: Value = serde_json::from_str(raw).map_err(|e| format!("AI 响应无法解析：{}", e))?;
+    let text = if provider == "anthropic" {
+        value["content"][0]["text"].as_str()
+    } else {
+        value["choices"][0]["message"]["content"].as_str()
+    };
+    text.map(str::to_string).filter(|value| !value.is_empty()).ok_or_else(|| "AI 返回了空内容".to_string())
+}
+
+async fn complete_ai_request(
+    provider: &str,
+    base_url: &str,
+    model: &str,
+    api_key: String,
+    prompt: &str,
+) -> Result<String, String> {
+    let url = endpoint(base_url, provider)?;
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(90))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    let body = if provider == "anthropic" {
+        headers.insert(
+            "x-api-key",
+            HeaderValue::from_str(&api_key).map_err(|_| "API Key 含有非法字符".to_string())?,
+        );
+        headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+        json!({
+            "model": model,
+            "max_tokens": 4096,
+            "messages": [{ "role": "user", "content": prompt }]
+        })
+    } else {
+        let authorization = format!("Bearer {}", api_key);
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&authorization).map_err(|_| "API Key 含有非法字符".to_string())?,
+        );
+        json!({
+            "model": model,
+            "messages": [{ "role": "user", "content": prompt }],
+            "temperature": 0.2
+        })
+    };
+
+    let response = client
+        .post(url)
+        .headers(headers)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("AI 请求失败：{}", e))?;
+    let status = response.status();
+    let raw = response.text().await.map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        let detail = raw.chars().take(500).collect::<String>();
+        return Err(format!("AI 请求失败（{}）：{}", status, detail));
+    }
+
+    extract_ai_text(provider, &raw)
+}
+
+#[tauri::command]
+async fn test_ai_connection(request: AiConfigRequest) -> Result<(), String> {
+    let api_key = request
+        .api_key
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| value.trim().to_string())
+        .or_else(|| stored_api_key().ok())
+        .ok_or_else(|| "请先配置 API Key".to_string())?;
+    complete_ai_request(
+        &request.provider,
+        &request.base_url,
+        &request.model,
+        api_key,
+        "只回复 OK。",
+    )
+    .await
+    .map(|_| ())
+}
+
+#[tauri::command]
+async fn complete_ai(app: tauri::AppHandle, request: AiCompletionRequest) -> Result<String, String> {
+    let config = read_ai_config(&app)?;
+    let provider = if request.provider.trim().is_empty() { config.provider } else { request.provider };
+    let base_url = if request.base_url.trim().is_empty() { config.base_url } else { request.base_url };
+    let model = if request.model.trim().is_empty() { config.model } else { request.model };
+    complete_ai_request(&provider, &base_url, &model, stored_api_key()?, &request.prompt).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{endpoint, extract_ai_text};
+
+    #[test]
+    fn builds_provider_endpoints() {
+        assert_eq!(
+            endpoint("https://api.openai.com/v1", "openai").unwrap(),
+            "https://api.openai.com/v1/chat/completions"
+        );
+        assert_eq!(
+            endpoint("https://api.anthropic.com", "anthropic").unwrap(),
+            "https://api.anthropic.com/v1/messages"
+        );
+    }
+
+    #[test]
+    fn extracts_openai_response_text() {
+        let raw = r#"{"choices":[{"message":{"content":"generated"}}]}"#;
+        assert_eq!(extract_ai_text("openai", raw).unwrap(), "generated");
+    }
+
+    #[test]
+    fn extracts_anthropic_response_text() {
+        let raw = r#"{"content":[{"type":"text","text":"generated"}]}"#;
+        assert_eq!(extract_ai_text("anthropic", raw).unwrap(), "generated");
+    }
+
+    #[test]
+    fn rejects_empty_ai_response() {
+        let raw = r#"{"choices":[{"message":{"content":""}}]}"#;
+        assert_eq!(extract_ai_text("openai", raw).unwrap_err(), "AI 返回了空内容");
+    }
 }
 
 // 读剪贴板图片并直接写成 PNG 文件,全程在 Rust 内完成,不经过 JS 传像素
@@ -144,6 +411,10 @@ pub fn run() {
             write_file_content,
             create_new_file,
             save_clipboard_image,
+            get_ai_config,
+            save_ai_config,
+            test_ai_connection,
+            complete_ai,
             confirm_close,
             take_pending_files
         ])

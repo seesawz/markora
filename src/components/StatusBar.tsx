@@ -1,7 +1,12 @@
 import { useEditorStore } from "../store/editorStore";
+import { useAiStore } from "../store/aiStore";
 import { useT } from "../lib/i18n";
 
-export function StatusBar() {
+interface StatusBarProps {
+  onOpenSettings: () => void;
+}
+
+export function StatusBar({ onOpenSettings }: StatusBarProps) {
   const {
     isDirty,
     currentFileName,
@@ -11,6 +16,7 @@ export function StatusBar() {
     wordCount,
     charCount,
   } = useEditorStore();
+  const { enabled: aiEnabled, isGenerating, error: aiError, setEnabled } = useAiStore();
 
   const tr = useT();
 
@@ -50,8 +56,19 @@ export function StatusBar() {
       {/* Right: cursor + counts */}
       <span
         className="flex items-center"
-        style={{ gap: 14, color: "var(--text-tertiary)" }}
+        style={{ gap: 10, color: "var(--text-tertiary)" }}
       >
+        <button
+          type="button"
+          className="statusbar-button"
+          style={{ color: aiEnabled ? "var(--accent)" : "var(--text-tertiary)" }}
+          onClick={() => setEnabled(!aiEnabled)}
+          title="开启或关闭 AI 续写"
+        >
+          {isGenerating ? "AI 生成中…" : aiEnabled ? "AI 续写：开" : "AI 续写：关"}
+        </button>
+        <button type="button" className="statusbar-button" onClick={onOpenSettings} title="AI 设置">设置</button>
+        {aiError && <span className="statusbar-error" title={aiError}>AI：{aiError}</span>}
         <span>Ln {cursorLine}, Col {cursorColumn}</span>
         <span>{wordCount} {tr.words}</span>
         <span>{charCount} {tr.chars}</span>

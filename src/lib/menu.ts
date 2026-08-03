@@ -50,6 +50,9 @@ export async function rebuildMenu() {
   const settingsMenu = await Submenu.new({
     text: L("设置", "Settings"),
     items: [
+      await MenuItem.new({ id: "ai_command", text: L("AI 指令", "AI Command"), accelerator: "CmdOrCtrl+Shift+P", action: emit("ai_command") }),
+      await MenuItem.new({ id: "open_settings", text: L("设置…", "Settings…"), accelerator: "CmdOrCtrl+,", action: emit("open_settings") }),
+      await MenuItem.new({ text: "-" }),
       await MenuItem.new({ id: "toggle_lang", text: "语言 / Language", accelerator: "CmdOrCtrl+Shift+L", action: emit("toggle_lang") }),
     ],
   });

@@ -33,7 +33,10 @@ import { languages } from "@codemirror/language-data";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { useEditorStore } from "../store/editorStore";
+import { useAiStore } from "../store/aiStore";
 import { wrapSelection, insertLink } from "../lib/editorOps";
+import { buildInlinePrompt, completeAi, normalizeAiText } from "../lib/ai";
+import { aiGhostTextExtension, clearAiGhost, showAiGhost } from "../lib/aiCompletion";
 import { SearchPanel } from "./SearchPanel";
 import { imagePreview } from "./imagePreview";
 import { wysiwyg } from "./wysiwyg";
@@ -206,6 +209,8 @@ const focusTheme = EditorView.theme({
 export function CodeMirrorEditor() {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const completionTimer = useRef<number | null>(null);
+  const completionRequestId = useRef(0);
   const highlightComp = useRef(new Compartment());
   const focusComp = useRef(new Compartment());
   const [searchOpen, setSearchOpen] = useState(false);
@@ -231,6 +236,16 @@ export function CodeMirrorEditor() {
     const updateListener = EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         setContent(update.state.doc.toString());
+        clearAiGhost(update.view);
+        if (completionTimer.current !== null) window.clearTimeout(completionTimer.current);
+        const requestId = ++completionRequestId.current;
+        if (useAiStore.getState().enabled && !useAiStore.getState().isGenerating) {
+          completionTimer.current = window.setTimeout(() => {
+            void requestInlineCompletion(update.view, () => requestId === completionRequestId.current);
+          }, 800);
+        }
+      } else if (update.selectionSet) {
+        clearAiGhost(update.view);
       }
       // 始终从最新 state 读光标:replaceAll 等事务可能不带 selection 但改变了行列
       const pos = update.state.selection.main.head;
@@ -296,6 +311,7 @@ export function CodeMirrorEditor() {
         EditorView.lineWrapping,
         wysiwyg(),
         imagePreview(),
+        ...aiGhostTextExtension(),
         EditorView.domEventHandlers({
           paste(event, view) {
             // ponytail: 统一走剪贴板插件读图片（webview 里 clipboardData.items 常读不到截图）
@@ -321,6 +337,8 @@ export function CodeMirrorEditor() {
     viewRef.current = view;
 
     return () => {
+      if (completionTimer.current !== null) window.clearTimeout(completionTimer.current);
+      completionRequestId.current += 1;
       view.destroy();
       viewRef.current = null;
     };
@@ -364,6 +382,17 @@ export function CodeMirrorEditor() {
     return unsub;
   }, []);
 
+  useEffect(() => {
+    const unsub = useAiStore.subscribe((state, previous) => {
+      if (state.enabled !== previous.enabled && !state.enabled && viewRef.current) {
+        completionRequestId.current += 1;
+        if (completionTimer.current !== null) window.clearTimeout(completionTimer.current);
+        clearAiGhost(viewRef.current);
+      }
+    });
+    return unsub;
+  }, []);
+
   return (
     <div
       className="h-full w-full overflow-hidden"
@@ -375,4 +404,33 @@ export function CodeMirrorEditor() {
       )}
     </div>
   );
+}
+
+async function requestInlineCompletion(
+  view: EditorView,
+  isCurrent: () => boolean,
+): Promise<void> {
+  const ai = useAiStore.getState();
+  if (!ai.enabled || !ai.apiKeyConfigured || ai.isGenerating) return;
+  if (view.state.selection.main.from !== view.state.selection.main.to) return;
+
+  const source = view.state.doc.toString();
+  const from = view.state.selection.main.head;
+  ai.setGenerating(true);
+  ai.setError(null);
+  try {
+    const raw = await completeAi({
+      provider: ai.provider,
+      baseUrl: ai.baseUrl,
+      model: ai.model,
+      prompt: buildInlinePrompt(view),
+    });
+    if (!isCurrent() || view.state.doc.toString() !== source) return;
+    const text = normalizeAiText(raw);
+    if (text) showAiGhost(view, from, text);
+  } catch (error) {
+    ai.setError(String(error));
+  } finally {
+    useAiStore.getState().setGenerating(false);
+  }
 }
