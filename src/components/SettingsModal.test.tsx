@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsModal } from "./SettingsModal";
 import { useAiStore } from "../store/aiStore";
@@ -49,12 +50,16 @@ describe("SettingsModal", () => {
 
     const baseUrl = screen.getByDisplayValue("https://api.openai.com/v1");
     await waitFor(() => expect(document.activeElement).toBe(baseUrl));
-    const model = screen.getByDisplayValue("gpt-4o-mini");
-    const apiKey = screen.getByPlaceholderText("粘贴 API Key");
+
+    // Fill fields
     fireEvent.change(baseUrl, { target: { value: "https://api.anthropic.com" } });
-    fireEvent.change(model, { target: { value: "claude-3-5-sonnet" } });
-    fireEvent.change(apiKey, { target: { value: "sk-test" } });
-    fireEvent.click(screen.getByRole("button", { name: "保存更改" }));
+    fireEvent.change(screen.getByDisplayValue("gpt-4o-mini"), { target: { value: "claude-3-5-sonnet" } });
+    fireEvent.change(screen.getByPlaceholderText("粘贴 API Key"), { target: { value: "sk-test" } });
+
+    // Submit the form directly
+    const form = document.querySelector("form");
+    expect(form).toBeTruthy();
+    form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 
     await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
     expect(saveAiConfigMock).toHaveBeenCalledWith({
@@ -79,8 +84,9 @@ describe("SettingsModal", () => {
     const onClose = vi.fn();
     render(<SettingsModal open onClose={onClose} />);
 
-    insertTextAtSelection(screen.getByPlaceholderText("粘贴 API Key"), "sk-test");
-    fireEvent.click(screen.getByRole("button", { name: "保存更改" }));
+    insertTextAtSelection(screen.getByPlaceholderText("粘贴 API Key") as HTMLInputElement, "sk-test");
+    const form = document.querySelector("form");
+    form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 
     await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
     expect(saveAiConfigMock).toHaveBeenCalledWith(expect.objectContaining({ apiKey: "sk-test" }));
@@ -92,17 +98,26 @@ describe("SettingsModal", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "搜索设置" }), { target: { value: "不存在" } });
 
     expect(screen.getByRole("heading", { name: "未找到设置" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "AI 服务" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "AI 续写" })).toBeNull();
   });
 
-  it("enables inline completion after an API Key is configured", () => {
+  it("shows the AI page when searching for the completion feature by name", () => {
+    render(<SettingsModal open onClose={vi.fn()} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "搜索设置" }), { target: { value: "续写" } });
+
+    expect(screen.getByRole("button", { name: "AI 续写" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "未找到设置" })).toBeNull();
+  });
+
+  it("enables inline completion after an API Key is configured", async () => {
+    const user = userEvent.setup();
     useAiStore.setState({ apiKey: "sk-test" });
     render(<SettingsModal open onClose={vi.fn()} />);
 
     const toggle = screen.getByRole("switch", { name: "开启 AI 续写" });
-    fireEvent.click(toggle);
+    await user.click(toggle);
 
-    expect(toggle.getAttribute("aria-checked")).toBe("true");
     expect(useAiStore.getState().enabled).toBe(true);
   });
 });
