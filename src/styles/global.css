@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 /* shadcn/ui neutral theme tokens mapped to the app's semantic variables. */
 @theme inline {
   --color-background: var(--bg-primary);
@@ -20,7 +22,7 @@
   --color-destructive-foreground: #ffffff;
   --color-border: var(--border-primary);
   --color-input: var(--border-primary);
-  --color-ring: var(--accent);
+  --color-ring: var(--ring);
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 10px;
@@ -48,6 +50,7 @@
   --accent-hover: #27272a;
   --accent-active: #09090b;
   --accent-light: #f4f4f5;
+  --ring: #a1a1aa;
 
   --statusbar-bg: #ffffffe6;
 
@@ -88,6 +91,7 @@
   --accent-hover: #e4e4e7;
   --accent-active: #ffffff;
   --accent-light: #27272a;
+  --ring: #71717a;
 
   --statusbar-bg: #09090be6;
 
@@ -99,6 +103,16 @@
   --shadow-sm: 0 2px 10px #00000066;
   --shadow-md: 0 4px 16.4px #00000066;
   --shadow-lg: 0 12px 32px #00000099;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
 }
 
 /* ponytail: 全局 reset 由 Tailwind v4 Preflight(@layer base)处理;

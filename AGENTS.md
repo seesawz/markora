@@ -27,6 +27,16 @@ Run Rust commands from `src-tauri/`. Use `npm run tauri dev` for native menus, d
 
 Use two-space indentation in TypeScript/TSX, double quotes, semicolons, and existing formatting. Name React components in PascalCase, functions and variables in camelCase, and stores with a `Store` suffix (for example, `aiStore.ts`). Keep reusable editor behavior in `src/lib/` rather than duplicating it in components. Format Rust with `rustfmt`; follow Rust snake_case naming. Reuse existing CSS variables and Tailwind utilities. No frontend lint script is configured.
 
+## UI Design Rules
+
+- Use Radix UI primitives for interactive components and keep the shadcn configuration at `components.json` with the `new-york` style and Zinc base color. Do not replace Radix behavior with ad hoc native implementations.
+- Follow the shadcn New York visual language: compact controls, restrained rounded corners, clear component borders, and neutral black, white, and Zinc tones. Do not introduce blue or other brand colors without an explicit request.
+- Preserve established layout values. Do not change widths, heights, margins, padding, gaps, or information hierarchy when adjusting visual styling unless the task explicitly asks for a layout change.
+- Use a flat interface. Do not add outer card backgrounds, section card containers, decorative shadows, or unnecessary separators.
+- Keep component-level borders for inputs, selects, menus, segmented controls, and dialogs unless the user explicitly requests borderless components.
+- Prefer visual refinement through color tokens, border radius, border color, focus states, hover states, and typography while keeping the existing component geometry stable.
+- Settings must remain a modal-based flow. Keep all AI provider, API key, model, language, and related preferences inside the settings modal.
+
 ## Testing Guidelines
 
 Every new or changed feature must include unit tests for React/TypeScript and Rust. If frontend test infrastructure is missing, add it with the feature; manual checks do not replace tests. Name Rust tests descriptively, such as `builds_provider_endpoints`. Run `npm test` and `cargo test` only immediately before compiling a release version; routine development and non-release builds do not require unit-test execution. Run `npm run build` after TypeScript or CSS changes.
