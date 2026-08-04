@@ -29,7 +29,7 @@ Use two-space indentation in TypeScript/TSX, double quotes, semicolons, and exis
 
 ## Testing Guidelines
 
-Every new or changed feature must include unit tests for React/TypeScript and Rust. If frontend test infrastructure is missing, add it with the feature; manual checks do not replace tests. Name Rust tests descriptively, such as `builds_provider_endpoints`. Run `cargo test` and `npm test` after code changes, plus `npm run build` after TypeScript or CSS changes.
+Every new or changed feature must include unit tests for React/TypeScript and Rust. If frontend test infrastructure is missing, add it with the feature; manual checks do not replace tests. Name Rust tests descriptively, such as `builds_provider_endpoints`. Run `npm test` and `cargo test` only immediately before compiling a release version; routine development and non-release builds do not require unit-test execution. Run `npm run build` after TypeScript or CSS changes.
 
 ## Commit & Pull Request Guidelines
 

@@ -1,7 +1,6 @@
 @import "tailwindcss";
 
-/* ponytail: shadcn/ui 主题 token -- 通过 @theme inline 把 shadcn 工具类
-   直接映射到现有 Kimi CSS 变量,不 emitted 新变量,避免 --accent 等命名冲突 */
+/* shadcn/ui neutral theme tokens mapped to the app's semantic variables. */
 @theme inline {
   --color-background: var(--bg-primary);
   --color-foreground: var(--text-primary);
@@ -10,94 +9,92 @@
   --color-popover: var(--bg-elevated);
   --color-popover-foreground: var(--text-primary);
   --color-primary: var(--accent);
-  --color-primary-foreground: #ffffff;
+  --color-primary-foreground: var(--bg-primary);
   --color-secondary: var(--bg-hover);
   --color-secondary-foreground: var(--text-primary);
   --color-muted: var(--bg-secondary);
   --color-muted-foreground: var(--text-secondary);
-  --color-accent: var(--bg-active);
+  --color-accent: var(--bg-hover);
   --color-accent-foreground: var(--text-primary);
   --color-destructive: #d14343;
   --color-destructive-foreground: #ffffff;
   --color-border: var(--border-primary);
   --color-input: var(--border-primary);
   --color-ring: var(--accent);
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
 }
 
 :root {
-  /* ponytail: Kimi 规范 -- 暖白基底 + 透明度分层 + KM Blue 品牌色 */
-  --bg-primary: #fbfaf9;       /* --Bg-GroundPC 暖白 */
-  --bg-secondary: #f5f5f5;     /* --Bg-Secondary */
-  --bg-tertiary: #f5f5f5;
-  --bg-elevated: #ffffff;      /* --Bg-Primary 卡片/面板 */
-  --bg-hover: #00000008;       /* --Fills-F1 3% */
-  --bg-active: #0000000d;      /* --Fills-F2 5% */
-  --bg-selected: #1783ff1a;    /* 浅蓝选中底 */
+  /* shadcn default: white canvas, zinc surfaces, black primary actions. */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f4f4f5;
+  --bg-tertiary: #fafafa;
+  --bg-elevated: #ffffff;
+  --bg-hover: #f4f4f5;
+  --bg-active: #e4e4e7;
+  --bg-selected: #e4e4e7;
 
-  --text-primary: #000000e6;    /* --Labels-Primary 90% */
-  --text-secondary: #00000099;  /* --Labels-Secondary 60% */
-  --text-tertiary: #00000073;   /* --Labels-Tertiary 45% */
-  --text-quaternary: #0000004d; /* --Labels-Quaternary 30% */
+  --text-primary: #18181b;
+  --text-secondary: #71717a;
+  --text-tertiary: #a1a1aa;
+  --text-quaternary: #d4d4d8;
 
-  --border-primary: #00000021;   /* --Separators-S1 13% */
-  --border-secondary: #00000014; /* --Others-SubLayerBg 8% */
+  --border-primary: #e4e4e7;
+  --border-secondary: #f4f4f5;
 
-  --accent: #1783ff;       /* --Colors-KMBlue */
-  --accent-hover: #167ff7; /* --Colors-KMBlue-hover */
-  --accent-active: #167cf2;/* --Colors-KMBlue-active */
-  --accent-light: #1783ff1a;
-  --accent-gradient: linear-gradient(135deg, #1783ff 0%, #526fff 100%);
+  --accent: #18181b;
+  --accent-hover: #27272a;
+  --accent-active: #09090b;
+  --accent-light: #f4f4f5;
 
-  --statusbar-bg: #fbfaf9d1;
+  --statusbar-bg: #ffffffe6;
 
-  --code-bg: #f5f5f5;
-  --code-border: #00000021;
+  --code-bg: #f4f4f5;
+  --code-border: #e4e4e7;
 
-  --selection: #1783ff33; /* --Others-TextSelected */
+  --selection: #18181b1a;
 
   --shadow-sm: 0 2px 10px #0000001a;
   --shadow-md: 0 4px 16.4px #0000001a;
   --shadow-lg: 0 12px 32px #0000001f;
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
 
   --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 :root.dark {
-  --bg-primary: #1c1c1e;
-  --bg-secondary: #2c2c2e;
-  --bg-tertiary: #2c2c2e;
-  --bg-elevated: #2c2c2e;
-  --bg-hover: #ffffff0a;
-  --bg-active: #ffffff14;
-  --bg-selected: #1783ff26;
+  --bg-primary: #09090b;
+  --bg-secondary: #18181b;
+  --bg-tertiary: #18181b;
+  --bg-elevated: #09090b;
+  --bg-hover: #27272a;
+  --bg-active: #3f3f46;
+  --bg-selected: #27272a;
 
-  --text-primary: #ffffffe6;
-  --text-secondary: #ffffff99;
-  --text-tertiary: #ffffff73;
-  --text-quaternary: #ffffff4d;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #71717a;
+  --text-quaternary: #52525b;
 
-  --border-primary: #ffffff21;
-  --border-secondary: #ffffff14;
+  --border-primary: #27272a;
+  --border-secondary: #18181b;
 
-  --accent: #1783ff;
-  --accent-hover: #3d94ff;
-  --accent-active: #167cf2;
-  --accent-light: #1783ff26;
-  --accent-gradient: linear-gradient(135deg, #1783ff 0%, #526fff 100%);
+  --accent: #fafafa;
+  --accent-hover: #e4e4e7;
+  --accent-active: #ffffff;
+  --accent-light: #27272a;
 
-  --statusbar-bg: #1c1c1ed1;
+  --statusbar-bg: #09090be6;
 
-  --code-bg: #2c2c2e;
-  --code-border: #ffffff21;
+  --code-bg: #18181b;
+  --code-border: #27272a;
 
-  --selection: #1783ff33;
+  --selection: #fafafa26;
 
   --shadow-sm: 0 2px 10px #00000066;
   --shadow-md: 0 4px 16.4px #00000066;
@@ -222,7 +219,7 @@ body {
 .ai-command-modal button,
 .primary-button {
   background: var(--accent);
-  color: white;
+  color: var(--bg-primary);
 }
 
 .ai-command-modal button:hover,
@@ -332,4 +329,3 @@ body {
   font-size: 12px;
   white-space: nowrap;
 }
-

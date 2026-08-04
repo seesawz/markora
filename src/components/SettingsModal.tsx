@@ -125,8 +125,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       type="button"
       className={
         activeSection === id
-          ? "flex items-center gap-2.5 w-full h-8 px-3 rounded-md bg-accent text-foreground font-medium text-sm transition-colors"
-          : "flex items-center gap-2.5 w-full h-8 px-3 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground text-sm transition-colors"
+          ? "flex items-center gap-2.5 w-full h-8 px-3 rounded-md bg-accent text-accent-foreground font-medium text-sm transition-colors"
+          : "flex items-center gap-2.5 w-full h-8 px-3 rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground text-sm transition-colors"
       }
       onClick={() => setActiveSection(id)}
     >
@@ -150,13 +150,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <section className="mt-6 first:mt-0">
       <h2 className="text-[13px] font-semibold text-foreground mb-1">{title}</h2>
-      <div className="divide-y divide-border">{children}</div>
+      <div>{children}</div>
     </section>
   );
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md"
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
       onKeyDown={(event) => event.key === "Escape" && onClose()}
     >
@@ -164,14 +164,14 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
-        className="relative flex w-[900px] h-[620px] max-w-[calc(100vw-48px)] max-h-[calc(100vh-48px)] overflow-hidden rounded-2xl border border-border bg-background shadow-2xl select-text"
+        className="relative flex w-[900px] h-[620px] max-w-[calc(100vw-48px)] max-h-[calc(100vh-48px)] overflow-hidden rounded-[20px] bg-background shadow-none select-text"
       >
         {/* Close button */}
         <button
           type="button"
           onClick={onClose}
           aria-label="关闭设置"
-          className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18" />
@@ -194,7 +194,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               onChange={(e) => setQuery(e.target.value)}
               placeholder={tr.settingsSearch}
               aria-label={tr.settingsSearch}
-              className="pl-9 h-8 text-sm"
+              className="pl-9 h-8 border-0 bg-muted/50 text-sm shadow-none focus-visible:ring-1"
             />
           </div>
 
@@ -252,10 +252,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 <Section title={tr.modelService}>
                   <SectionRow label={tr.apiFormat} description={tr.apiFormatDesc}>
                     <Select value={provider} onValueChange={(value) => setProvider(value as AiProvider)}>
-                      <SelectTrigger className="w-[220px] h-8 text-sm">
+                      <SelectTrigger className="w-[220px] h-8 border-0 bg-muted/50 text-sm shadow-none focus:ring-1">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="rounded-lg border-border-secondary shadow-lg">
+                      <SelectContent className="rounded-lg !border-0 shadow-lg">
                         <SelectItem value="openai">OpenAI Compatible</SelectItem>
                         <SelectItem value="anthropic">Anthropic</SelectItem>
                       </SelectContent>
@@ -269,7 +269,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       onChange={(e) => setBaseUrl(e.target.value)}
                       placeholder="https://api.example.com"
                       spellCheck={false}
-                      className="w-[220px] h-8 text-sm"
+                      className="w-[220px] h-8 border-0 bg-muted/50 text-sm shadow-none focus-visible:ring-1"
                     />
                   </SectionRow>
 
@@ -279,7 +279,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       onChange={(e) => setModel(e.target.value)}
                       placeholder="例如 gpt-4o-mini"
                       spellCheck={false}
-                      className="w-[220px] h-8 text-sm"
+                      className="w-[220px] h-8 border-0 bg-muted/50 text-sm shadow-none focus-visible:ring-1"
                     />
                   </SectionRow>
 
@@ -292,7 +292,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                         placeholder={tr.apiKeyPlaceholder}
                         autoComplete="off"
                         spellCheck={false}
-                        className="pr-10 h-8 text-sm"
+                        className="h-8 border-0 bg-muted/50 pr-10 text-sm shadow-none focus-visible:ring-1"
                       />
                       <button
                         type="button"
@@ -309,7 +309,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 {message && (
                   <div
                     role="status"
-                    className="mt-3 flex items-start gap-2 rounded-md border border-border bg-muted px-2.5 py-2 text-[12px] text-muted-foreground"
+                    className="mt-3 flex items-start gap-2 rounded-md bg-muted px-2.5 py-2 text-[12px] text-muted-foreground"
                   >
                     <svg className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="12" cy="12" r="10" />
@@ -323,14 +323,14 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 <div className="mt-5 flex justify-end gap-2">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={() => void handleTest()}
                     disabled={busy}
                   >
                     {tr.testConnection}
                   </Button>
-                  <Button type="submit" variant="outline" size="sm" disabled={busy}>
+                  <Button type="submit" variant="default" size="sm" disabled={busy}>
                     {tr.save}
                   </Button>
                 </div>
@@ -343,7 +343,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
                 <Section title={tr.settingsLanguage}>
                   <SectionRow label={tr.settingsLanguage} description={tr.settingsLanguageDesc}>
-                    <div className="inline-flex h-8 rounded-md border border-border bg-background overflow-hidden">
+                    <div className="inline-flex h-8 overflow-hidden rounded-md bg-muted/50">
                       {(["zh", "en"] as const).map((l) => (
                         <button
                           key={l}
