@@ -343,7 +343,7 @@ export default function App() {
       }
     } catch {}
 
-    // JS 接管原生菜单（语言切换时重建）
+    // JS 接管原生菜单（设置页语言切换时重建）
     rebuildMenu().catch((e) => console.error("build menu failed:", e));
 
     // ponytail: 每次击键都会进这个订阅,防抖 500ms 再写 localStorage
@@ -434,11 +434,6 @@ export default function App() {
         }
         case "toggle_theme": store.toggleTheme(); break;
         case "toggle_focus": store.toggleFocusMode(); break;
-        case "toggle_lang": {
-          store.setLang(store.lang === "zh" ? "en" : "zh");
-          try { await rebuildMenu(); } catch (e) { console.error("rebuild menu failed:", e); }
-          break;
-        }
         case "close_requested": {
           if (await confirmDiscardIfDirty()) {
             try { await invoke("confirm_close"); } catch (e) { console.error(e); }

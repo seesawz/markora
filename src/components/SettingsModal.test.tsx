@@ -5,11 +5,16 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsModal } from "./SettingsModal";
 import { useAiStore } from "../store/aiStore";
+import { useEditorStore } from "../store/editorStore";
 import { insertTextAtSelection } from "../lib/inputOps";
 
 const { saveAiConfigMock, testAiConnectionMock } = vi.hoisted(() => ({
   saveAiConfigMock: vi.fn(),
   testAiConnectionMock: vi.fn(),
+}));
+
+const { rebuildMenuMock } = vi.hoisted(() => ({
+  rebuildMenuMock: vi.fn(),
 }));
 
 vi.mock("../lib/ai", async () => {
@@ -21,11 +26,15 @@ vi.mock("../lib/ai", async () => {
   };
 });
 
+vi.mock("../lib/menu", () => ({ rebuildMenu: rebuildMenuMock }));
+
 describe("SettingsModal", () => {
   afterEach(cleanup);
 
   beforeEach(() => {
     vi.clearAllMocks();
+    rebuildMenuMock.mockResolvedValue(undefined);
+    useEditorStore.setState({ lang: "zh" });
     useAiStore.setState({
       provider: "anthropic",
       baseUrl: "https://api.openai.com/v1",
@@ -95,7 +104,7 @@ describe("SettingsModal", () => {
   it("filters the settings page with the sidebar search", () => {
     render(<SettingsModal open onClose={vi.fn()} />);
 
-    fireEvent.change(screen.getByRole("textbox", { name: "搜索设置" }), { target: { value: "不存在" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "搜索设置..." }), { target: { value: "不存在" } });
 
     expect(screen.getByRole("heading", { name: "未找到设置" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "AI 续写" })).toBeNull();
@@ -104,10 +113,22 @@ describe("SettingsModal", () => {
   it("shows the AI page when searching for the completion feature by name", () => {
     render(<SettingsModal open onClose={vi.fn()} />);
 
-    fireEvent.change(screen.getByRole("textbox", { name: "搜索设置" }), { target: { value: "续写" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "搜索设置..." }), { target: { value: "续写" } });
 
     expect(screen.getByRole("button", { name: "AI 续写" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "未找到设置" })).toBeNull();
+  });
+
+  it("changes the interface language from Appearance settings", async () => {
+    const user = userEvent.setup();
+    render(<SettingsModal open onClose={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "外观" }));
+    await user.click(screen.getByRole("button", { name: "English" }));
+
+    expect(useEditorStore.getState().lang).toBe("en");
+    expect(screen.getByRole("heading", { name: "Appearance" })).toBeTruthy();
+    expect(rebuildMenuMock).toHaveBeenCalledOnce();
   });
 
   it("enables inline completion after an API Key is configured", async () => {
@@ -115,7 +136,7 @@ describe("SettingsModal", () => {
     useAiStore.setState({ apiKey: "sk-test" });
     render(<SettingsModal open onClose={vi.fn()} />);
 
-    const toggle = screen.getByRole("switch", { name: "开启 AI 续写" });
+    const toggle = screen.getByRole("switch", { name: "启用 AI 续写" });
     await user.click(toggle);
 
     expect(useAiStore.getState().enabled).toBe(true);

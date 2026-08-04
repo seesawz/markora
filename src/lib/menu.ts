@@ -2,7 +2,7 @@ import { Menu, MenuItem, Submenu } from "@tauri-apps/api/menu";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEditorStore } from "../store/editorStore";
 
-// ponytail: JS 单点管理原生菜单；语言切换时整体重建
+// ponytail: JS 单点管理原生菜单；设置页语言变化时整体重建
 export async function rebuildMenu() {
   const lang = useEditorStore.getState().lang;
   const zh = lang === "zh";
@@ -52,8 +52,6 @@ export async function rebuildMenu() {
     items: [
       await MenuItem.new({ id: "ai_command", text: L("AI 指令", "AI Command"), accelerator: "CmdOrCtrl+Shift+P", action: emit("ai_command") }),
       await MenuItem.new({ id: "open_settings", text: L("设置…", "Settings…"), accelerator: "CmdOrCtrl+,", action: emit("open_settings") }),
-      await MenuItem.new({ text: "-" }),
-      await MenuItem.new({ id: "toggle_lang", text: "语言 / Language", accelerator: "CmdOrCtrl+Shift+L", action: emit("toggle_lang") }),
     ],
   });
 
