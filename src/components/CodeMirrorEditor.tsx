@@ -253,11 +253,6 @@ export function CodeMirrorEditor() {
       } else {
         clearAiGhost(update.view);
       }
-      const normalized = normalizeMarkdownSelection(update.state);
-      if (normalized) {
-        update.view.dispatch({ selection: normalized });
-        return;
-      }
       // 始终从最新 state 读光标:replaceAll 等事务可能不带 selection 但改变了行列
       const pos = update.state.selection.main.head;
       const line = update.state.doc.lineAt(pos);

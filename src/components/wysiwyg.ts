@@ -1,139 +1,166 @@
-import { Extension, RangeSetBuilder, StateField, EditorState } from "@codemirror/state";
+import { Extension, RangeSetBuilder, StateEffect, StateField, EditorState } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
+import { getFormattedSpans, type FormattedSpan, type FormatKind } from "../lib/markdownFormatting";
 
-// ponytail: WYSIWYG — 光标不在某节点内时,用 Decoration.replace 隐藏 markdown 语法符号,
-// 配上 HighlightStyle 的字号/粗斜体,视觉上就是渲染态。光标进入,符号回来可编辑。
-// 不支持表格(明确不做)。
+export { normalizeMarkdownSelection } from "../lib/markdownFormatting";
 
-// Typora 行为: 选区保持渲染态(标记隐藏,只显示样式);光标进入节点显示标记(可编辑)
+type EditingSpan = {
+  kind: FormatKind;
+  lineFrom: number;
+  outerFrom: number;
+  outerTo: number;
+};
+
+const commitMarkdownEditing = StateEffect.define<null>();
+
+function toEditingSpan(state: EditorState, span: FormattedSpan): EditingSpan {
+  return {
+    kind: span.kind,
+    lineFrom: state.doc.lineAt(span.outerFrom).from,
+    outerFrom: span.outerFrom,
+    outerTo: span.outerTo,
+  };
+}
+
+function spanAtCursor(state: EditorState, kind?: FormatKind): FormattedSpan | null {
+  const head = state.selection.main.head;
+  const spans = getFormattedSpans(state)
+    .filter((span) => (!kind || span.kind === kind) && head >= span.outerFrom && head <= span.outerTo)
+    .sort((a, b) => (a.outerTo - a.outerFrom) - (b.outerTo - b.outerFrom));
+  return spans[0] ?? null;
+}
+
+const markdownEditingField = StateField.define<EditingSpan | null>({
+  create() {
+    return null;
+  },
+  update(editing, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(commitMarkdownEditing)) return null;
+    }
+
+    if (!tr.newSelection.main.empty) return null;
+
+    if (!tr.docChanged) {
+      if (!editing) return null;
+      const span = spanAtCursor(tr.state, editing.kind);
+      if (!span
+        || tr.state.doc.lineAt(span.outerFrom).from !== editing.lineFrom
+        || span.outerFrom > editing.outerTo
+        || span.outerTo < editing.outerFrom) return null;
+      return toEditingSpan(tr.state, span);
+    }
+
+    let inserted = "";
+    tr.changes.iterChanges((_fromA, _toA, _fromB, _toB, text) => {
+      inserted += text.toString();
+    });
+    if (inserted.includes("\n")) return null;
+
+    if (editing) {
+      const mappedFrom = tr.changes.mapPos(editing.outerFrom, 1);
+      const mappedTo = tr.changes.mapPos(editing.outerTo, -1);
+      const span = getFormattedSpans(tr.state)
+        .filter((item) => item.kind === editing.kind
+          && item.outerFrom <= mappedTo
+          && item.outerTo >= mappedFrom
+          && tr.state.selection.main.head >= item.outerFrom
+          && tr.state.selection.main.head <= item.outerTo)
+        .sort((a, b) => (a.outerTo - a.outerFrom) - (b.outerTo - b.outerFrom))[0];
+      return span ? toEditingSpan(tr.state, span) : null;
+    }
+
+    if (inserted.length === 0) return null;
+
+    const currentLine = tr.state.doc.lineAt(tr.state.selection.main.head);
+    const previousLine = tr.startState.doc.lineAt(tr.startState.selection.main.head);
+    const currentSpans = getFormattedSpans(tr.state)
+      .filter((span) => tr.state.doc.lineAt(span.outerFrom).from === currentLine.from);
+    const previousSpans = getFormattedSpans(tr.startState)
+      .filter((span) => tr.startState.doc.lineAt(span.outerFrom).from === previousLine.from);
+    const span = spanAtCursor(tr.state);
+    if (!span) return null;
+    const current = currentSpans.filter((item) => item.kind === span.kind);
+    const previous = previousSpans.filter((item) => item.kind === span.kind);
+    const formatStarted = current.length > previous.length
+      || previous.some((item) => item.contentFrom === item.contentTo)
+        && current.some((item) => item.contentFrom < item.contentTo);
+    return formatStarted ? toEditingSpan(tr.state, span) : null;
+  },
+});
+
+// 新格式在当前编辑范围内显示标记，离开范围、选中或换行后进入渲染态。
 export function shouldRevealMarkdownMarks(state: EditorState, from: number, to: number): boolean {
-  const sel = state.selection.main;
-  // 选区非空 → 保持渲染态,标记隐藏(只显示大字号/粗体等样式)
-  if (!sel.empty) return false;
-  // 光标在节点内 → 显示标记(可编辑)
-  return sel.from <= to && sel.to >= from;
+  const editing = state.field(markdownEditingField, false);
+  if (editing && editing.outerFrom <= to && editing.outerTo >= from) {
+    return true;
+  }
+
+  const selection = state.selection.main;
+  if (!selection.empty) return false;
+  return getFormattedSpans(state).some((span) => (
+    span.contentFrom === span.contentTo
+    && span.outerFrom <= to
+    && span.outerTo >= from
+    && selection.head >= span.outerFrom
+    && selection.head <= span.outerTo
+  ));
 }
 
-function normalizeSelectionBoundary(state: EditorState, position: number, side: "start" | "end"): number {
-  let result = position;
-  const line = state.doc.lineAt(position);
-  syntaxTree(state).iterate({
-    enter(node) {
-      const { name, from, to } = node;
+type DecorationSpec = {
+  from: number;
+  to: number;
+  decoration: Decoration;
+};
 
-      if (/^ATXHeading[1-6]$/.test(name) && from === line.from && position <= line.from) {
-        const mark = node.node.getChild("HeaderMark");
-        if (mark && side === "start") result = Math.max(result, Math.min(mark.to + 1, line.to));
-        return false;
-      }
-
-      if (side === "start" && from === position) {
-        const markName = {
-          StrongEmphasis: "EmphasisMark",
-          Emphasis: "EmphasisMark",
-          Strikethrough: "StrikethroughMark",
-          InlineCode: "CodeMark",
-        }[name];
-        if (markName) {
-          const marks = node.node.getChildren(markName);
-          if (marks.length >= 2) result = Math.max(result, marks[0].to);
-        }
-      }
-
-      if (side === "end" && to === position) {
-        const markName = {
-          StrongEmphasis: "EmphasisMark",
-          Emphasis: "EmphasisMark",
-          Strikethrough: "StrikethroughMark",
-          InlineCode: "CodeMark",
-        }[name];
-        if (markName) {
-          const marks = node.node.getChildren(markName);
-          if (marks.length >= 2) result = Math.min(result, marks[marks.length - 1].from);
-        }
-      }
-    },
-  });
-  return result;
-}
-
-// 选区从隐藏语法标记开始时,把边界移到可见正文,避免浏览器选区把标记重新绘制出来。
-export function normalizeMarkdownSelection(
-  state: EditorState,
-  selection = state.selection,
-): { anchor: number; head: number } | null {
-  const main = selection.main;
-  if (main.empty) return null;
-
-  const forward = main.anchor <= main.head;
-  const start = normalizeSelectionBoundary(state, main.from, "start");
-  const end = normalizeSelectionBoundary(state, main.to, "end");
-  const anchor = forward ? start : end;
-  const head = forward ? end : start;
-  if (anchor === main.anchor && head === main.head) return null;
-  return { anchor, head };
-}
-
-// 用 mark 隐藏而不是 replace: CodeMirror 在选区穿过 replace 装饰时会重新显示原文。
-function hide(builder: RangeSetBuilder<Decoration>, from: number, to: number) {
+function hide(decorations: DecorationSpec[], from: number, to: number) {
   if (from < to) {
-    builder.add(from, to, Decoration.mark({
-      attributes: { style: "display: none !important" },
-    }));
+    decorations.push({
+      from,
+      to,
+      decoration: Decoration.mark({
+        attributes: { style: "display: none !important" },
+      }),
+    });
   }
 }
 
 function buildWysiwygDecos(state: EditorState): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>();
+  const decorations: DecorationSpec[] = [];
+  const add = (from: number, to: number, decoration: Decoration) => {
+    decorations.push({ from, to, decoration });
+  };
   const tree = syntaxTree(state);
+
+  // 这些范围同时供选区归一化和删除逻辑使用，避免渲染态与编辑态出现不同边界。
+  for (const span of getFormattedSpans(state)) {
+    if (span.kind === "heading") {
+      const line = state.doc.lineAt(span.outerFrom);
+      const prefix = state.doc.sliceString(span.outerFrom, span.contentFrom);
+      const level = Math.min(6, Math.max(1, prefix.match(/^#+/)?.[0].length ?? 1));
+      add(line.from, line.from, Decoration.line({ attributes: { class: `cm-md-h${level}` } }));
+    }
+    if (!shouldRevealMarkdownMarks(state, span.outerFrom, span.outerTo)) {
+      for (const range of span.markRanges) hide(decorations, range.from, range.to);
+    }
+  }
 
   tree.iterate({
     enter(node) {
       const { from, to, name } = node;
 
-      // ---- 标题:ATXHeading1..6,隐藏开头的 # 序列,整行加 class ----
-      const headingMatch = /^ATXHeading([1-6])$/.exec(name);
-      if (headingMatch) {
-        const level = headingMatch[1];
-        const line = state.doc.lineAt(from);
-        builder.add(line.from, line.from, Decoration.line({ attributes: { class: `cm-md-h${level}` } }));
-        if (!shouldRevealMarkdownMarks(state, line.from, line.to)) {
-          const mark = node.node.getChild("HeaderMark");
-          if (mark) hide(builder, mark.from, Math.min(mark.to + 1, line.to)); // +1 吃掉 # 后的空格
-        }
-        return false; // 不进子节点,避免重复处理
-      }
-
       // ---- Setext 标题(=== / ---):隐藏下划标记行 ----
       if (name === "SetextHeading1" || name === "SetextHeading2") {
         const level = name === "SetextHeading1" ? "1" : "2";
         const line = state.doc.lineAt(from);
-        builder.add(line.from, line.from, Decoration.line({ attributes: { class: `cm-md-h${level}` } }));
+        add(line.from, line.from, Decoration.line({ attributes: { class: `cm-md-h${level}` } }));
         if (!shouldRevealMarkdownMarks(state, from, to)) {
           const mark = node.node.getChild("SetextMark");
           if (mark) {
             const markLine = state.doc.lineAt(mark.from);
-            hide(builder, markLine.from, markLine.to);
+            hide(decorations, markLine.from, markLine.to);
           }
-        }
-        return false;
-      }
-
-      // ---- 粗体/斜体:隐藏 ** 或 * 标记 ----
-      if (name === "StrongEmphasis" || name === "Emphasis") {
-        if (!shouldRevealMarkdownMarks(state, from, to)) {
-          const marks = node.node.getChildren("EmphasisMark");
-          for (const m of marks) hide(builder, m.from, m.to);
-        }
-        return false;
-      }
-
-      // ---- 行内代码:隐藏反引号 ----
-      if (name === "InlineCode") {
-        if (!shouldRevealMarkdownMarks(state, from, to)) {
-          const marks = node.node.getChildren("CodeMark");
-          for (const m of marks) hide(builder, m.from, m.to);
         }
         return false;
       }
@@ -145,12 +172,12 @@ function buildWysiwygDecos(state: EditorState): DecorationSet {
           const marks = node.node.getChildren("LinkMark");
           const url = node.node.getChild("URL");
           if (marks.length >= 2) {
-            hide(builder, marks[0].from, marks[0].to); // [
+            hide(decorations, marks[0].from, marks[0].to); // [
             // 从 ]( 到 url 结束 ) 全隐藏
             const closeBracket = marks[1];
             const end = url ? Math.max(url.to, closeBracket.to) : closeBracket.to;
             const lastMark = marks[marks.length - 1];
-            hide(builder, closeBracket.from, Math.max(lastMark.to, end));
+            hide(decorations, closeBracket.from, Math.max(lastMark.to, end));
           }
         }
         return false;
@@ -159,20 +186,11 @@ function buildWysiwygDecos(state: EditorState): DecorationSet {
       // ---- 图片:交给现有 imagePreview extension,这里跳过 ----
       if (name === "Image") return false;
 
-      // ---- 删除线:隐藏 ~~ ----
-      if (name === "Strikethrough") {
-        if (!shouldRevealMarkdownMarks(state, from, to)) {
-          const marks = node.node.getChildren("StrikethroughMark");
-          for (const m of marks) hide(builder, m.from, m.to);
-        }
-        return false;
-      }
-
       // ---- 引用块:隐藏行首 > ,整行加引用样式 ----
       if (name === "QuoteMark") {
         const line = state.doc.lineAt(from);
         if (!shouldRevealMarkdownMarks(state, line.from, line.to)) {
-          hide(builder, from, Math.min(to + 1, line.to)); // ">" + 后面的空格
+          hide(decorations, from, Math.min(to + 1, line.to)); // ">" + 后面的空格
         }
         return false;
       }
@@ -183,7 +201,7 @@ function buildWysiwygDecos(state: EditorState): DecorationSet {
         if (!shouldRevealMarkdownMarks(state, line.from, line.to)) {
           const ordered = !!node.node.parent && node.node.parent.name === "OrderedList"
             || !!(node.node.parent?.parent && node.node.parent.parent.name === "OrderedList");
-          builder.add(from, to, Decoration.replace({ widget: new BulletWidget(ordered ? state.doc.sliceString(from, to) : "•") }));
+          add(from, to, Decoration.replace({ widget: new BulletWidget(ordered ? state.doc.sliceString(from, to) : "•") }));
         }
         return false;
       }
@@ -192,7 +210,7 @@ function buildWysiwygDecos(state: EditorState): DecorationSet {
       if (name === "TaskMarker") {
         const line = state.doc.lineAt(from);
         if (!shouldRevealMarkdownMarks(state, line.from, line.to)) {
-          builder.add(from, to, Decoration.replace({}));
+          add(from, to, Decoration.replace({}));
         }
         return false;
       }
@@ -201,14 +219,18 @@ function buildWysiwygDecos(state: EditorState): DecorationSet {
       if (name === "HorizontalRule") {
         if (!shouldRevealMarkdownMarks(state, from, to)) {
           const line = state.doc.lineAt(from);
-          builder.add(line.from, line.from, Decoration.line({ attributes: { class: "cm-md-hr-line" } }));
-          hide(builder, from, to);
+          add(line.from, line.from, Decoration.line({ attributes: { class: "cm-md-hr-line" } }));
+          hide(decorations, from, to);
         }
         return false;
       }
     },
   });
 
+  const builder = new RangeSetBuilder<Decoration>();
+  decorations
+    .sort((a, b) => a.from - b.from || a.to - b.to)
+    .forEach(({ from, to, decoration }) => builder.add(from, to, decoration));
   return builder.finish();
 }
 
@@ -232,16 +254,30 @@ const wysiwygField = StateField.define<DecorationSet>({
     return buildWysiwygDecos(state);
   },
   update(deco, tr) {
-    // 文档或光标变化都要重建(光标进出节点决定显隐)
-    if (!tr.docChanged && !tr.selection) return deco.map(tr.changes);
+    const editingChanged = tr.effects.some((effect) => effect.is(commitMarkdownEditing));
+    if (!tr.docChanged && !tr.selection && !editingChanged) return deco.map(tr.changes);
     return buildWysiwygDecos(tr.state);
   },
-  provide: (f) => EditorView.decorations.from(f),
+  provide: (f) => [
+    EditorView.decorations.from(f),
+    EditorView.atomicRanges.of((view) => view.state.field(f)),
+  ],
+});
+
+const commitEditingOnBlur = EditorView.domEventHandlers({
+  blur(_event, view) {
+    if (view.state.field(markdownEditingField) !== null) {
+      view.dispatch({ effects: commitMarkdownEditing.of(null) });
+    }
+    return false;
+  },
 });
 
 export function wysiwyg(): Extension {
   return [
+    markdownEditingField,
     wysiwygField,
+    commitEditingOnBlur,
     EditorView.baseTheme({
       // 标题字号(渲染态) -- Kimi markdown 规范: H1=22/H2=20/H3=18px
       ".cm-md-h1": { fontSize: "22px", fontWeight: "700", lineHeight: "1.4", letterSpacing: "-0.02em" },

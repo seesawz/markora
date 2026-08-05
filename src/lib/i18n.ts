@@ -53,6 +53,12 @@ const dict = {
     testConnection: "测试连接",
     connectionSuccess: "连接成功。",
     apiKeyPlaceholder: "粘贴 API Key",
+    closeSettings: "关闭设置",
+    notFound: "未找到设置",
+    notFoundDesc: "试试搜索 “AI”、“模型” 或 “API Key”。",
+    apiKeyRequiredMessage: "请先在下方填写并保存 API Key，再开启 AI 续写。",
+    zhLanguage: "简体中文",
+    enLanguage: "English",
   },
   en: {
     saved: "Saved",
@@ -102,6 +108,12 @@ const dict = {
     testConnection: "Test connection",
     connectionSuccess: "Connection successful.",
     apiKeyPlaceholder: "Paste API Key",
+    closeSettings: "Close settings",
+    notFound: "No settings found",
+    notFoundDesc: "Try searching for \"AI\", \"model\", or \"API Key\".",
+    apiKeyRequiredMessage: "Please fill in and save your API Key below first, then enable AI completion.",
+    zhLanguage: "简体中文",
+    enLanguage: "English",
   },
 } as const;
 

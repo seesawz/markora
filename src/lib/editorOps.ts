@@ -1,20 +1,7 @@
 import { findClusterBreak, type EditorState } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import type { EditorView } from "@codemirror/view";
-
-type FormatBoundary = {
-  nodeFrom: number;
-  nodeTo: number;
-  contentFrom: number;
-  contentTo: number;
-};
-
-const formatMarks: Record<string, string> = {
-  StrongEmphasis: "EmphasisMark",
-  Emphasis: "EmphasisMark",
-  Strikethrough: "StrikethroughMark",
-  InlineCode: "CodeMark",
-};
+import { formattedSpanAt, getFormattedSpans, type FormattedSpan } from "./markdownFormatting";
 
 const protectedMarkdownMarks = new Set([
   "HeaderMark",
@@ -30,7 +17,10 @@ const protectedMarkdownMarks = new Set([
 ]);
 
 function protectedRanges(state: EditorState, from: number, to: number): Array<{ from: number; to: number }> {
-  const ranges: Array<{ from: number; to: number }> = [];
+  const ranges = getFormattedSpans(state).flatMap((span) => span.markRanges)
+    .filter((range) => range.from < to && range.to > from)
+    .map((range) => ({ from: Math.max(range.from, from), to: Math.min(range.to, to) }));
+
   syntaxTree(state).iterate({
     enter(node) {
       if (protectedMarkdownMarks.has(node.name) && node.from < to && node.to > from) {
@@ -40,7 +30,15 @@ function protectedRanges(state: EditorState, from: number, to: number): Array<{ 
   });
 
   ranges.sort((a, b) => a.from - b.from || a.to - b.to);
-  return ranges.filter((range, index) => index === 0 || range.from > ranges[index - 1].to);
+  return ranges.reduce<Array<{ from: number; to: number }>>((merged, range) => {
+    const previous = merged[merged.length - 1];
+    if (previous && range.from <= previous.to) {
+      previous.to = Math.max(previous.to, range.to);
+    } else {
+      merged.push({ ...range });
+    }
+    return merged;
+  }, []);
 }
 
 function deleteSelectionPreservingMarkdown(view: EditorView): boolean {
@@ -72,39 +70,6 @@ function deleteSelectionPreservingMarkdown(view: EditorView): boolean {
   return true;
 }
 
-function formatBoundaryAt(state: EditorState, position: number): FormatBoundary | null {
-  let result: FormatBoundary | null = null;
-  const tree = syntaxTree(state);
-
-  tree.iterate({
-    enter(node) {
-      const markName = formatMarks[node.name];
-      if (!markName || position < node.from || position > node.to) return;
-
-      const marks = node.node.getChildren(markName);
-      if (marks.length < 2) return;
-
-      const opening = marks[0];
-      const closing = marks[marks.length - 1];
-      const contentFrom = opening.to;
-      const contentTo = closing.from;
-      if (position !== node.to && position !== contentFrom && position !== contentTo) return;
-
-      const boundary = {
-        nodeFrom: node.from,
-        nodeTo: node.to,
-        contentFrom,
-        contentTo,
-      };
-      if (!result || boundary.nodeTo - boundary.nodeFrom < result.nodeTo - result.nodeFrom) {
-        result = boundary;
-      }
-    },
-  });
-
-  return result;
-}
-
 const emptyFormatMarkers = ["**", "__", "~~", "`", "*", "_"];
 
 function deleteEmptyFormat(view: EditorView, position: number): boolean {
@@ -126,20 +91,34 @@ function deleteEmptyFormat(view: EditorView, position: number): boolean {
   return false;
 }
 
+function removeEmptyFormatting(view: EditorView, position: number, span: FormattedSpan): boolean {
+  if (span.contentFrom !== span.contentTo || span.markRanges.length === 0) return false;
+
+  const changes = span.markRanges.map((range) => ({ from: range.from, to: range.to, insert: "" }));
+  const changeSet = view.state.changes(changes);
+  view.dispatch({
+    changes,
+    selection: { anchor: changeSet.mapPos(position, -1) },
+  });
+  return true;
+}
+
 // Typora-like deletion: consume formatted content before touching its delimiters.
 export function deleteBackward(view: EditorView): boolean {
   const selection = view.state.selection.main;
   if (!selection.empty) return deleteSelectionPreservingMarkdown(view);
 
   const position = selection.head;
-  const format = formatBoundaryAt(view.state, position);
-  if (format && position >= format.contentTo && format.contentTo > format.contentFrom) {
+  const format = formattedSpanAt(view.state, position, "end");
+  if (format && format.contentTo > format.contentFrom) {
     const from = findClusterBreak(view.state.doc.toString(), format.contentTo, false);
     if (from >= format.contentFrom) {
       view.dispatch({ changes: { from, to: format.contentTo, insert: "" }, selection: { anchor: from } });
       return true;
     }
   }
+
+  if (format && removeEmptyFormatting(view, position, format)) return true;
 
   return deleteEmptyFormat(view, position);
 }
@@ -149,14 +128,16 @@ export function deleteForward(view: EditorView): boolean {
   if (!selection.empty) return deleteSelectionPreservingMarkdown(view);
 
   const position = selection.head;
-  const format = formatBoundaryAt(view.state, position);
-  if (format && position <= format.contentFrom && format.contentTo > format.contentFrom) {
+  const format = formattedSpanAt(view.state, position, "start");
+  if (format && format.contentTo > format.contentFrom) {
     const to = findClusterBreak(view.state.doc.toString(), format.contentFrom, true);
     if (to <= format.contentTo) {
       view.dispatch({ changes: { from: format.contentFrom, to, insert: "" }, selection: { anchor: position } });
       return true;
     }
   }
+
+  if (format && removeEmptyFormatting(view, position, format)) return true;
 
   return deleteEmptyFormat(view, position);
 }

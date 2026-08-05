@@ -170,7 +170,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         <button
           type="button"
           onClick={onClose}
-          aria-label="关闭设置"
+          aria-label={tr.closeSettings}
           className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -240,7 +240,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       checked={config.enabled}
                       onCheckedChange={(checked) => {
                         if (checked && !config.apiKey) {
-                          setMessage("请先在下方填写并保存 API Key，再开启 AI 续写。");
+                          setMessage(tr.apiKeyRequiredMessage);
                           return;
                         }
                         config.setEnabled(checked);
@@ -356,7 +356,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                               : "text-muted-foreground hover:bg-accent hover:text-foreground")
                           }
                         >
-                          {l === "zh" ? "简体中文" : "English"}
+                          {l === "zh" ? tr.zhLanguage : tr.enLanguage}
                         </button>
                       ))}
                     </div>
@@ -366,10 +366,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <h1 id="settings-title" className="text-xl font-semibold text-foreground mb-2">
-                  未找到设置
+                  {tr.notFound}
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  试试搜索 “AI”、“模型” 或 “API Key”。
+                  {tr.notFoundDesc}
                 </p>
               </div>
             )}

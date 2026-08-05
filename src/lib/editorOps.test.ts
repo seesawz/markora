@@ -2,8 +2,9 @@ import { EditorState } from "@codemirror/state";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import type { EditorView } from "@codemirror/view";
 import { describe, expect, it } from "vitest";
-import { normalizeMarkdownSelection, shouldRevealMarkdownMarks } from "../components/wysiwyg";
+import { normalizeMarkdownSelection, shouldRevealMarkdownMarks, wysiwyg } from "../components/wysiwyg";
 import { deleteBackward, deleteForward } from "./editorOps";
+import { getFormattedSpans } from "./markdownFormatting";
 
 function testView(doc: string, position: number) {
   let state = EditorState.create({
@@ -33,6 +34,116 @@ describe("Typora-like formatted text deletion", () => {
     expect(shouldRevealMarkdownMarks(state, 0, 9)).toBe(false);
   });
 
+  it("keeps completed marks hidden at a collapsed cursor", () => {
+    const state = EditorState.create({
+      doc: "### title",
+      selection: { anchor: 4 },
+      extensions: [markdown({ base: markdownLanguage })],
+    });
+
+    expect(shouldRevealMarkdownMarks(state, 0, 9)).toBe(false);
+  });
+
+  it("keeps an empty heading visible so the caret remains editable", () => {
+    const state = EditorState.create({
+      doc: "### ",
+      selection: { anchor: 4 },
+      extensions: [markdown({ base: markdownLanguage }), wysiwyg()],
+    });
+
+    expect(shouldRevealMarkdownMarks(state, 0, 4)).toBe(true);
+  });
+
+  it("reveals a newly started format while its content is being typed", () => {
+    let state = EditorState.create({
+      doc: "### ",
+      selection: { anchor: 4 },
+      extensions: [markdown({ base: markdownLanguage }), wysiwyg()],
+    });
+
+    state = state.update({
+      changes: { from: 4, insert: "标" },
+      selection: { anchor: 5 },
+    }).state;
+
+    expect(shouldRevealMarkdownMarks(state, 0, 5)).toBe(true);
+  });
+
+  it("keeps a new heading editable until an explicit commit action", () => {
+    let state = EditorState.create({
+      doc: "### ",
+      selection: { anchor: 4 },
+      extensions: [markdown({ base: markdownLanguage }), wysiwyg()],
+    });
+
+    state = state.update({
+      changes: { from: 4, insert: "标题" },
+      selection: { anchor: 6 },
+    }).state;
+    expect(shouldRevealMarkdownMarks(state, 0, 6)).toBe(true);
+
+    state = state.update({
+      changes: { from: 6, insert: "继续" },
+      selection: { anchor: 8 },
+    }).state;
+    expect(shouldRevealMarkdownMarks(state, 0, 8)).toBe(true);
+  });
+
+  it("commits a heading when Enter moves to the next line", () => {
+    let state = EditorState.create({
+      doc: "### ",
+      selection: { anchor: 4 },
+      extensions: [markdown({ base: markdownLanguage }), wysiwyg()],
+    });
+
+    state = state.update({
+      changes: { from: 4, insert: "标题" },
+      selection: { anchor: 6 },
+    }).state;
+    state = state.update({
+      changes: { from: 6, insert: "\n" },
+      selection: { anchor: 7 },
+    }).state;
+
+    expect(shouldRevealMarkdownMarks(state, 0, 6)).toBe(false);
+  });
+
+  it("commits a heading before showing a text selection", () => {
+    let state = EditorState.create({
+      doc: "### ",
+      selection: { anchor: 4 },
+      extensions: [markdown({ base: markdownLanguage }), wysiwyg()],
+    });
+
+    state = state.update({
+      changes: { from: 4, insert: "标题" },
+      selection: { anchor: 6 },
+    }).state;
+    state = state.update({ selection: { anchor: 4, head: 6 } }).state;
+
+    expect(shouldRevealMarkdownMarks(state, 0, 6)).toBe(false);
+  });
+
+  it("commits inline formatting when typing continues outside it", () => {
+    let state = EditorState.create({
+      doc: "**bold",
+      selection: { anchor: 6 },
+      extensions: [markdown({ base: markdownLanguage }), wysiwyg()],
+    });
+
+    state = state.update({
+      changes: { from: 6, insert: "**" },
+      selection: { anchor: 8 },
+    }).state;
+    expect(shouldRevealMarkdownMarks(state, 0, 8)).toBe(true);
+
+    state = state.update({
+      changes: { from: 8, insert: "x" },
+      selection: { anchor: 9 },
+    }).state;
+    expect(shouldRevealMarkdownMarks(state, 0, 8)).toBe(false);
+  });
+
   it("moves a heading selection start past the hidden prefix", () => {
     const state = EditorState.create({
       doc: "### title",
@@ -41,6 +152,37 @@ describe("Typora-like formatted text deletion", () => {
     });
 
     expect(normalizeMarkdownSelection(state)).toEqual({ anchor: 4, head: 9 });
+  });
+
+  it("normalizes reverse selections without exposing inline marks", () => {
+    const state = EditorState.create({
+      doc: "**bold**",
+      selection: { anchor: 8, head: 0 },
+      extensions: [markdown({ base: markdownLanguage })],
+    });
+
+    expect(normalizeMarkdownSelection(state)).toEqual({ anchor: 6, head: 2 });
+  });
+
+  it("finds all supported complete inline formats", () => {
+    const state = EditorState.create({
+      doc: "**bold** *italic* ~~strike~~ `code`",
+      extensions: [markdown({ base: markdownLanguage })],
+    });
+
+    expect(getFormattedSpans(state).map((span) => span.kind)).toEqual([
+      "strong",
+      "emphasis",
+      "strike",
+      "code",
+    ]);
+  });
+
+  it("builds WYSIWYG decorations for mixed formatted content", () => {
+    expect(() => EditorState.create({
+      doc: "[link](url)\n### **title**\n***nested***",
+      extensions: [markdown({ base: markdownLanguage }), wysiwyg()],
+    })).not.toThrow();
   });
 
   it("deletes bold text before its delimiters", () => {
@@ -56,7 +198,9 @@ describe("Typora-like formatted text deletion", () => {
     const heading = testView("### title", 0);
     heading.view.dispatch({ selection: { anchor: 0, head: 9 } });
     expect(deleteBackward(heading.view)).toBe(true);
-    expect(heading.read().doc.toString()).toBe("###");
+    expect(heading.read().doc.toString()).toBe("### ");
+    expect(deleteBackward(heading.view)).toBe(true);
+    expect(heading.read().doc.toString()).toBe("");
 
     const bold = testView("**hello**", 0);
     bold.view.dispatch({ selection: { anchor: 0, head: 9 } });
@@ -73,5 +217,14 @@ describe("Typora-like formatted text deletion", () => {
       expect(deleteForward(view)).toBe(true);
       expect(read().doc.toString()).toBe(expected);
     }
+  });
+
+  it("deletes Unicode graphemes before inline marks", () => {
+    const { view, read } = testView("**你🙂**", 5);
+
+    expect(deleteBackward(view)).toBe(true);
+    expect(read().doc.toString()).toBe("**你**");
+    expect(deleteBackward(view)).toBe(true);
+    expect(read().doc.toString()).toBe("****");
   });
 });
