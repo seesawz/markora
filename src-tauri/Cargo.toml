@@ -1,6 +1,6 @@
 [package]
 name = "markora"
-version = "1.2.0"
+version = "1.2.1"
 description = "Markora - A minimalist Markdown editor"
 authors = ["you"]
 edition = "2021"

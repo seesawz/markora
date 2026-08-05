@@ -139,7 +139,10 @@ const editorTheme = EditorView.theme({
     // 居中阅读栏:与 .typora-content 同宽(760px),两侧自动留白
     maxWidth: "760px",
     margin: "0 auto",
-    padding: "0 48px",
+    padding: "0",
+  },
+  ".cm-line": {
+    padding: "0 50px 0 54px",
   },
   ".cm-gutters": {
     backgroundColor: "transparent",
@@ -148,6 +151,7 @@ const editorTheme = EditorView.theme({
   },
   ".cm-activeLine": {
     backgroundColor: "rgba(0, 0, 0, 0.022)",
+    backgroundClip: "content-box",
   },
   ".cm-activeLineGutter": {
     backgroundColor: "transparent",
