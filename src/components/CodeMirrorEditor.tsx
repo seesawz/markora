@@ -131,7 +131,7 @@ const editorTheme = EditorView.theme({
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Noto Sans", Ubuntu, Cantarell, "Helvetica Neue", sans-serif, Arial, "PingFang SC", "Source Han Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC"',
     lineHeight: "1.8",
     // ponytail: Kimi 网页聊天式布局--纵向留白交给 scroller,横向居中交给 content
-    padding: "80px 0 140px",
+    padding: "24px 0 140px",
   },
   ".cm-content": {
     caretColor: "var(--accent)",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEditorStore } from "./store/editorStore";
 import { CodeMirrorEditor, insertClipboardImage } from "./components/CodeMirrorEditor";
 import { StatusBar } from "./components/StatusBar";
@@ -16,8 +16,11 @@ import { rebuildMenu } from "./lib/menu";
 import { buildCommandPrompt, completeAi, normalizeAiText } from "./lib/ai";
 import { getSelectedDomText, getSelectedText, getTextInputPasteTarget, insertTextAtSelection, trackTextInputFocus } from "./lib/inputOps";
 import { useAiStore } from "./store/aiStore";
-import { AiCommandModal } from "./components/AiCommandModal";
+import { useWorkspaceStore, type WorkspaceFile } from "./store/workspaceStore";
+import { AiCommandModal, type AiCommandStatus } from "./components/AiCommandModal";
 import { SettingsModal } from "./components/SettingsModal";
+import { FileTree } from "./components/FileTree";
+import { TabBar } from "./components/TabBar";
 import typoraCss from "./styles/typora.css?raw";
 
 function getEditorView(): EditorView | null {
@@ -260,6 +263,8 @@ async function openFileFromPath(path: string): Promise<void> {
     store.setContent(content);
     store.setFilePath(path);
     store.setDirty(false);
+    const name = path.split(/[\\/]/).pop() || path;
+    useWorkspaceStore.getState().openTab(path, name);
   } catch (e) {
     console.error("Failed to open file:", e);
   }
@@ -267,9 +272,15 @@ async function openFileFromPath(path: string): Promise<void> {
 
 export default function App() {
   const { theme, isDirty } = useEditorStore();
+  const { root, tree, tabs, activeTabPath } = useWorkspaceStore();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aiCommandOpen, setAiCommandOpen] = useState(false);
+  const [aiStatus, setAiStatus] = useState<AiCommandStatus>("idle");
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiAnchor, setAiAnchor] = useState<{ x: number; y: number } | null>(null);
+  // ponytail: 打开弹窗时保存编辑器视图引用,避免提交时焦点仍在输入框导致 getEditorView() 返回 null
+  const aiCommandViewRef = useRef<EditorView | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -281,19 +292,165 @@ export default function App() {
     });
   }, []);
 
-  const handleAiCommand = async (instruction: string) => {
+  // --- 工作区 / 标签 ---
+
+  // 切换/打开新文件前先保存当前文件的未保存修改（切标签不丢内容）
+  const flushCurrentFile = async () => {
+    const { isDirty, currentFilePath, content } = useEditorStore.getState();
+    if (isDirty && currentFilePath) {
+      try {
+        await invoke("write_file_content", { path: currentFilePath, content });
+        useEditorStore.getState().setDirty(false);
+      } catch (e) {
+        console.error("Failed to flush file:", e);
+      }
+    }
+  };
+
+  const loadFileIntoEditor = async (path: string) => {
+    const content = await invoke<string>("read_file_content", { path });
+    const store = useEditorStore.getState();
+    store.setContent(content);
+    store.setFilePath(path);
+  };
+
+  const openFileInWorkspace = async (path: string) => {
+    await flushCurrentFile();
+    try {
+      await loadFileIntoEditor(path);
+      const name = path.split(/[\\/]/).pop() || path;
+      useWorkspaceStore.getState().openTab(path, name);
+    } catch (e) {
+      console.error("Failed to open file:", e);
+    }
+  };
+
+  const openFileDialog = async () => {
+    const selected = await open({ multiple: false, filters: [{ name: "Markdown", extensions: ["md", "markdown"] }] });
+    if (!selected) return;
+    await openFileInWorkspace(selected as string);
+  };
+
+  const selectTab = async (path: string) => {
+    const ws = useWorkspaceStore.getState();
+    if (ws.activeTabPath === path && useEditorStore.getState().currentFilePath === path) return;
+    await flushCurrentFile();
+    try {
+      await loadFileIntoEditor(path);
+      ws.setActiveTab(path);
+    } catch (e) {
+      console.error("Failed to open tab:", e);
+    }
+  };
+
+  const closeTab = async (path: string) => {
+    const ws = useWorkspaceStore.getState();
+    const editorOnTab = useEditorStore.getState().currentFilePath === path;
+    if (editorOnTab) await flushCurrentFile();
+    const nextActive = ws.closeTab(path);
+    if (!editorOnTab) return;
+    if (nextActive) {
+      try {
+        await loadFileIntoEditor(nextActive);
+      } catch (e) {
+        console.error("Failed to load next tab:", e);
+        const store = useEditorStore.getState();
+        store.setContent("");
+        store.setFilePath(null);
+        store.setDirty(false);
+      }
+    } else {
+      // 关闭最后一个标签：回到空白文档
+      const store = useEditorStore.getState();
+      store.setContent("");
+      store.setFilePath(null);
+      store.setDirty(false);
+    }
+  };
+
+  const refreshWorkspaceTree = async () => {
+    const ws = useWorkspaceStore.getState();
+    if (!ws.root) return;
+    try {
+      const next = await invoke<WorkspaceFile[]>("scan_workspace", { root: ws.root });
+      ws.setTree(next);
+    } catch (e) {
+      console.error("Failed to scan workspace:", e);
+    }
+  };
+
+  const openFolder = async () => {
+    const selected = await open({ directory: true, multiple: false });
+    if (!selected) return;
+    const folder = selected as string;
+    useWorkspaceStore.getState().setRoot(folder);
+    await refreshWorkspaceTree();
+    try {
+      localStorage.setItem("markora:workspace", folder);
+    } catch {}
+  };
+
+  const newFileInWorkspace = async () => {
+    await flushCurrentFile();
+    const rootPath = useWorkspaceStore.getState().root;
+    const defaultPath = rootPath ? `${rootPath}/untitled.md` : "untitled.md";
+    const selected = await save({
+      defaultPath,
+      filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
+    });
+    if (!selected) return;
+    try {
+      await invoke("create_new_file", { path: selected });
+      await loadFileIntoEditor(selected);
+      const name = selected.split(/[\\/]/).pop() || selected;
+      useWorkspaceStore.getState().openTab(selected, name);
+      await refreshWorkspaceTree();
+    } catch (e) {
+      console.error("Failed to create file:", e);
+    }
+  };
+
+  const openAiCommand = () => {
+    const view = (window as any).__cmView as EditorView | null;
+    aiCommandViewRef.current = view;
+    if (view) {
+      const rect = view.coordsAtPos(view.state.selection.main.head);
+      setAiAnchor(
+        rect
+          ? { x: rect.left, y: rect.bottom }
+          : { x: Math.round(window.innerWidth / 2), y: Math.round(window.innerHeight / 2) },
+      );
+    } else {
+      setAiAnchor(null);
+    }
+    setAiStatus("idle");
+    setAiError(null);
+    setAiCommandOpen(true);
+  };
+
+  const closeAiCommand = () => {
     setAiCommandOpen(false);
-    const view = getEditorView();
-    if (!view) return;
+    aiCommandViewRef.current?.focus();
+  };
+
+  const handleAiCommand = async (instruction: string) => {
+    const view = aiCommandViewRef.current;
+    if (!view) {
+      setAiError("无法定位编辑器，请重试。");
+      setAiStatus("error");
+      return;
+    }
     const currentAi = useAiStore.getState();
     if (!currentAi.apiKey) {
-      currentAi.setError("请先在 AI 设置中配置 API Key。");
-      setSettingsOpen(true);
+      setAiError("请先在 AI 设置中配置 API Key。");
+      setAiStatus("error");
       return;
     }
 
     const { from, to } = view.state.selection.main;
     const source = view.state.doc.toString();
+    setAiStatus("generating");
+    setAiError(null);
     currentAi.setGenerating(true);
     currentAi.setError(null);
     try {
@@ -313,7 +470,11 @@ export default function App() {
         selection: { anchor: from + text.length },
       });
       view.focus();
+      setAiCommandOpen(false);
+      setAiStatus("idle");
     } catch (error) {
+      setAiError(String(error));
+      setAiStatus("error");
       currentAi.setError(String(error));
     } finally {
       useAiStore.getState().setGenerating(false);
@@ -339,12 +500,23 @@ export default function App() {
                 st.setContent(content);
                 st.setFilePath(s.currentFilePath);
                 st.setDirty(false);
+                const name = s.currentFilePath.split(/[\\/]/).pop() || s.currentFilePath;
+                useWorkspaceStore.getState().openTab(s.currentFilePath, name);
               } catch { /* file gone */ }
             } else {
               void openFileFromPath(pending[0]);
             }
           }).catch(() => {});
         }
+      }
+
+      // 恢复上次的工作区文件夹并重新扫描文件树
+      const savedRoot = localStorage.getItem("markora:workspace");
+      if (savedRoot) {
+        useWorkspaceStore.getState().setRoot(savedRoot);
+        invoke<WorkspaceFile[]>("scan_workspace", { root: savedRoot })
+          .then((tree) => useWorkspaceStore.getState().setTree(tree))
+          .catch(() => useWorkspaceStore.getState().setTree([]));
       }
     } catch {}
 
@@ -382,7 +554,7 @@ export default function App() {
       }
       if (cmd && e.shiftKey && e.key.toLowerCase() === "p") {
         e.preventDefault();
-        setAiCommandOpen(true);
+        openAiCommand();
         return;
       }
       if (cmd && e.key === "s") { e.preventDefault(); saveImpl(); }
@@ -396,34 +568,15 @@ export default function App() {
       const store = useEditorStore.getState();
       switch (id) {
         case "open_settings": setSettingsOpen(true); break;
-        case "ai_command": setAiCommandOpen(true); break;
-        case "new_file": {
-          if (!(await confirmDiscardIfDirty())) break;
-          const selected = await save({
-            defaultPath: "untitled.md",
-            filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
-          });
-          if (!selected) break;
-          try {
-            await invoke("create_new_file", { path: selected });
-            store.setContent("");
-            store.setFilePath(selected);
-            store.setDirty(false);
-          } catch (e) { console.error(e); }
-          break;
-        }
+        case "ai_command": openAiCommand(); break;
+        case "new_file": await newFileInWorkspace(); break;
         case "open_file": {
-          if (!(await confirmDiscardIfDirty())) break;
           const selected = await open({ multiple: false, filters: [{ name: "Markdown", extensions: ["md", "markdown"] }] });
           if (!selected) break;
-          try {
-            const content = await invoke<string>("read_file_content", { path: selected as string });
-            store.setContent(content);
-            store.setFilePath(selected as string);
-            store.setDirty(false);
-          } catch (e) { console.error(e); }
+          await openFileInWorkspace(selected as string);
           break;
         }
+        case "open_folder": await openFolder(); break;
         case "save": await saveImpl(); break;
         case "save_as": {
           const selected = await save({
@@ -497,6 +650,23 @@ export default function App() {
     };
   }, []);
 
+  // AI 指令输入框跟随光标:编辑器/窗口滚动或缩放时重新计算锚点
+  useEffect(() => {
+    if (!aiCommandOpen) return;
+    const updateAnchor = () => {
+      const view = aiCommandViewRef.current;
+      if (!view) return;
+      const rect = view.coordsAtPos(view.state.selection.main.head);
+      if (rect) setAiAnchor({ x: rect.left, y: rect.bottom });
+    };
+    window.addEventListener("scroll", updateAnchor, true);
+    window.addEventListener("resize", updateAnchor);
+    return () => {
+      window.removeEventListener("scroll", updateAnchor, true);
+      window.removeEventListener("resize", updateAnchor);
+    };
+  }, [aiCommandOpen]);
+
   // Auto-save: 1.5s after the last edit, if we have a file path and there are unsaved changes
   useEffect(() => {
     let timer: number | null = null;
@@ -537,29 +707,48 @@ export default function App() {
       background: "var(--bg-primary)",
       position: "relative",
     }}>
-      <div className="flex-1 overflow-hidden" style={{ position: "relative" }}>
-        <div
-          style={{ position: "relative", zIndex: 1, height: "100%" }}
-          onContextMenu={handleContextMenu}
-        >
-          <CodeMirrorEditor />
-          {isDirty && (
+      <div className="flex flex-1 overflow-hidden">
+        <FileTree
+          root={root}
+          tree={tree}
+          activePath={activeTabPath}
+          onOpenFile={(path) => { void openFileInWorkspace(path); }}
+          onOpenFileDialog={() => { void openFileDialog(); }}
+          onOpenFolder={() => { void openFolder(); }}
+          onNewFile={() => { void newFileInWorkspace(); }}
+        />
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <TabBar
+            tabs={tabs}
+            activePath={activeTabPath}
+            onSelect={(path) => { void selectTab(path); }}
+            onClose={(path) => { void closeTab(path); }}
+          />
+          <div className="flex-1 overflow-hidden" style={{ position: "relative" }}>
             <div
-              title={t("unsavedTitle")}
-              style={{
-                position: "absolute",
-                top: 14,
-                right: 18,
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-                background: "var(--accent)",
-                boxShadow: "0 0 0 3px var(--accent-light)",
-                zIndex: 20,
-                pointerEvents: "none",
-              }}
-            />
-          )}
+              style={{ position: "relative", zIndex: 1, height: "100%" }}
+              onContextMenu={handleContextMenu}
+            >
+              <CodeMirrorEditor />
+              {isDirty && (
+                <div
+                  title={t("unsavedTitle")}
+                  style={{
+                    position: "absolute",
+                    top: 14,
+                    right: 18,
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    background: "var(--accent)",
+                    boxShadow: "0 0 0 3px var(--accent-light)",
+                    zIndex: 20,
+                    pointerEvents: "none",
+                  }}
+                />
+              )}
+            </div>
+          </div>
         </div>
       </div>
       <StatusBar
@@ -576,7 +765,10 @@ export default function App() {
       )}
       <AiCommandModal
         open={aiCommandOpen}
-        onClose={() => setAiCommandOpen(false)}
+        anchor={aiAnchor}
+        status={aiStatus}
+        error={aiError}
+        onClose={closeAiCommand}
         onSubmit={(instruction) => { void handleAiCommand(instruction); }}
       />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />

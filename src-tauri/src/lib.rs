@@ -23,6 +23,77 @@ fn create_new_file(path: &str) -> Result<(), String> {
     fs::write(path, "").map_err(|e| e.to_string())
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceEntry {
+    name: String,
+    path: String,
+    is_dir: bool,
+    children: Vec<WorkspaceEntry>,
+}
+
+// 忽略的目录：版本控制、构建产物、依赖、工具目录
+const SKIP_DIRS: [&str; 8] = [".git", ".svn", ".hg", "node_modules", "target", "dist", ".obsidian", ".trash"];
+const MAX_SCAN_DEPTH: usize = 8;
+
+fn scan_dir(dir: &std::path::Path, depth: usize) -> Result<Vec<WorkspaceEntry>, String> {
+    if depth > MAX_SCAN_DEPTH {
+        return Ok(Vec::new());
+    }
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    let mut files: Vec<PathBuf> = Vec::new();
+    let rd = fs::read_dir(dir).map_err(|e| e.to_string())?;
+    for entry in rd.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') {
+            continue;
+        }
+        let path = entry.path();
+        if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            if !SKIP_DIRS.contains(&name.as_str()) {
+                dirs.push(path);
+            }
+        } else if is_markdown_path(&name) {
+            files.push(path);
+        }
+    }
+    dirs.sort();
+    files.sort();
+
+    let mut entries = Vec::new();
+    for d in dirs {
+        let children = scan_dir(&d, depth + 1)?;
+        if children.is_empty() {
+            continue; // 空目录不展示
+        }
+        entries.push(WorkspaceEntry {
+            name: d.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+            path: d.to_string_lossy().to_string(),
+            is_dir: true,
+            children,
+        });
+    }
+    for f in files {
+        entries.push(WorkspaceEntry {
+            name: f.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+            path: f.to_string_lossy().to_string(),
+            is_dir: false,
+            children: Vec::new(),
+        });
+    }
+    Ok(entries)
+}
+
+/// 递归扫描文件夹，返回按目录分组的 Markdown 文件树
+#[tauri::command]
+fn scan_workspace(root: &str) -> Result<Vec<WorkspaceEntry>, String> {
+    let root = PathBuf::from(root);
+    if !root.is_dir() {
+        return Err("不是有效的文件夹".to_string());
+    }
+    scan_dir(&root, 0)
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AiConfigFile {
@@ -287,7 +358,7 @@ async fn complete_ai(app: tauri::AppHandle, request: AiCompletionRequest) -> Res
 
 #[cfg(test)]
 mod tests {
-    use super::{endpoint, extract_ai_text};
+    use super::{endpoint, extract_ai_text, scan_dir, scan_workspace};
 
     #[test]
     fn builds_provider_endpoints() {
@@ -331,6 +402,39 @@ mod tests {
         let err = extract_ai_text("openai", raw).unwrap_err();
         assert!(err.contains("AI 返回了空内容"), "unexpected error: {}", err);
         assert!(err.contains("原始响应"), "should include raw body: {}", err);
+    }
+
+    #[test]
+    fn scans_workspace_into_file_tree() {
+        use std::fs;
+        let tmp = std::env::temp_dir().join(format!("markora-scan-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(tmp.join("docs/sub")).unwrap();
+        fs::create_dir_all(tmp.join(".git")).unwrap();
+        fs::write(tmp.join("readme.md"), "# hi").unwrap();
+        fs::write(tmp.join("docs/sub/note.markdown"), "x").unwrap();
+        fs::write(tmp.join("docs/other.md"), "y").unwrap();
+        fs::write(tmp.join(".git/config"), "").unwrap(); // 隐藏目录应被跳过
+        fs::write(tmp.join("docs/skip.txt"), "").unwrap(); // 非 md 应被跳过
+
+        let tree = scan_dir(&tmp, 0).unwrap();
+        let names: Vec<&str> = tree.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, vec!["docs", "readme.md"]);
+
+        let docs = &tree[0];
+        assert!(docs.is_dir);
+        assert_eq!(docs.children.len(), 2);
+        assert_eq!(docs.children[0].name, "sub");
+        assert_eq!(docs.children[0].children[0].name, "note.markdown");
+        assert_eq!(docs.children[1].name, "other.md");
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn scan_workspace_rejects_non_dir() {
+        let err = scan_workspace("/nonexistent/path/xyz").unwrap_err();
+        assert!(!err.is_empty());
     }
 }
 
@@ -457,6 +561,7 @@ pub fn run() {
             read_file_content,
             write_file_content,
             create_new_file,
+            scan_workspace,
             save_clipboard_image,
             get_ai_config,
             save_ai_config,

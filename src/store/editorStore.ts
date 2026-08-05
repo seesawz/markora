@@ -55,7 +55,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setFilePath: (path) => {
     const fileName = path
-      ? path.split("/").pop() || "未命名.md"
+      ? path.split(/[\\/]/).pop() || "未命名.md"
       : "未命名.md";
     set({ currentFilePath: path, currentFileName: fileName, isDirty: false });
   },

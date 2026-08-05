@@ -25,3 +25,6 @@ dist-ssr
 
 # Rust / Tauri
 src-tauri/target/
+
+# WorkBuddy workspace data
+.workbuddy/

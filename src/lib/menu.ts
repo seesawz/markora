@@ -18,6 +18,7 @@ export async function rebuildMenu() {
     items: [
       await MenuItem.new({ id: "new_file", text: L("新建文件", "New File"), accelerator: "CmdOrCtrl+N", action: emit("new_file") }),
       await MenuItem.new({ id: "open_file", text: L("打开文件…", "Open File…"), accelerator: "CmdOrCtrl+O", action: emit("open_file") }),
+      await MenuItem.new({ id: "open_folder", text: L("打开文件夹…", "Open Folder…"), accelerator: "CmdOrCtrl+Shift+O", action: emit("open_folder") }),
       await MenuItem.new({ text: "-" }),
       await MenuItem.new({ id: "save", text: L("保存", "Save"), accelerator: "CmdOrCtrl+S", action: emit("save") }),
       await MenuItem.new({ id: "save_as", text: L("另存为…", "Save As…"), accelerator: "CmdOrCtrl+Shift+S", action: emit("save_as") }),
