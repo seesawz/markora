@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { EditorState, Compartment } from "@codemirror/state";
+import { EditorState, Compartment, Prec } from "@codemirror/state";
 import {
   EditorView,
   keymap,
@@ -34,12 +34,12 @@ import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { useEditorStore } from "../store/editorStore";
 import { useAiStore } from "../store/aiStore";
-import { wrapSelection, insertLink } from "../lib/editorOps";
+import { deleteBackward, deleteForward, wrapSelection, insertLink } from "../lib/editorOps";
 import { buildInlinePrompt, completeAi, normalizeAiText } from "../lib/ai";
 import { aiGhostTextExtension, clearAiGhost, showAiGhost } from "../lib/aiCompletion";
 import { SearchPanel } from "./SearchPanel";
 import { imagePreview } from "./imagePreview";
-import { wysiwyg } from "./wysiwyg";
+import { normalizeMarkdownSelection, wysiwyg } from "./wysiwyg";
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir } from "@tauri-apps/api/path";
 
@@ -250,8 +250,13 @@ export function CodeMirrorEditor() {
             void requestInlineCompletion(update.view, () => requestId === completionRequestId.current);
           }, 800);
         }
-      } else if (update.selectionSet) {
+      } else {
         clearAiGhost(update.view);
+      }
+      const normalized = normalizeMarkdownSelection(update.state);
+      if (normalized) {
+        update.view.dispatch({ selection: normalized });
+        return;
       }
       // 始终从最新 state 读光标:replaceAll 等事务可能不带 selection 但改变了行列
       const pos = update.state.selection.main.head;
@@ -259,7 +264,7 @@ export function CodeMirrorEditor() {
       setCursor(line.number, pos - line.from + 1);
     });
 
-    const markdownKeymap = keymap.of([
+    const markdownKeymap = Prec.high(keymap.of([
       {
         key: "Mod-f",
         run: () => {
@@ -286,7 +291,20 @@ export function CodeMirrorEditor() {
         key: "Mod-k",
         run: (view) => insertLink(view),
       },
-    ]);
+      {
+        key: "Backspace",
+        run: (view) => deleteBackward(view),
+      },
+      {
+        key: "Delete",
+        run: (view) => deleteForward(view),
+      },
+    ]));
+    const markdownSelectionFilter = EditorState.transactionFilter.of((transaction) => {
+      if (!transaction.changes.empty || transaction.newSelection.main.empty) return transaction;
+      const normalized = normalizeMarkdownSelection(transaction.startState, transaction.newSelection);
+      return normalized ? [transaction, { selection: normalized }] : transaction;
+    });
 
     const state = EditorState.create({
       doc: content,
@@ -306,6 +324,7 @@ export function CodeMirrorEditor() {
         highlightActiveLine(),
         highlightSelectionMatches(),
         markdownKeymap,
+        markdownSelectionFilter,
         keymap.of([
           ...closeBracketsKeymap,
           ...defaultKeymap,

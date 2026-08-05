@@ -24,6 +24,18 @@ export function getSelectedText(input: TextInputElement): string {
   return input.value.slice(start, end);
 }
 
+export function getSelectedDomText(): string | null {
+  const selection = document.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
+
+  const anchor = selection.anchorNode;
+  const anchorElement = anchor instanceof Element ? anchor : anchor?.parentElement;
+  if (anchorElement?.closest(".cm-editor")) return null;
+
+  const text = selection.toString();
+  return text.length > 0 ? text : null;
+}
+
 export function insertTextAtSelection(input: TextInputElement, text: string): void {
   const start = input.selectionStart ?? input.value.length;
   const end = input.selectionEnd ?? start;

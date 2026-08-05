@@ -14,7 +14,7 @@ import { wrapSelection, insertLink } from "./lib/editorOps";
 import { t } from "./lib/i18n";
 import { rebuildMenu } from "./lib/menu";
 import { buildCommandPrompt, completeAi, normalizeAiText } from "./lib/ai";
-import { getSelectedText, getTextInputPasteTarget, insertTextAtSelection, trackTextInputFocus } from "./lib/inputOps";
+import { getSelectedDomText, getSelectedText, getTextInputPasteTarget, insertTextAtSelection, trackTextInputFocus } from "./lib/inputOps";
 import { useAiStore } from "./store/aiStore";
 import { AiCommandModal } from "./components/AiCommandModal";
 import { SettingsModal } from "./components/SettingsModal";
@@ -33,7 +33,12 @@ async function doCopy(): Promise<void> {
     const text = getSelectedText(input);
     if (text) {
       try { await writeText(text); } catch (e) { console.error(e); }
+      return;
     }
+  }
+  const domText = getSelectedDomText();
+  if (domText) {
+    try { await writeText(domText); } catch (e) { console.error(e); }
     return;
   }
   const view = getEditorView();
