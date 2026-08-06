@@ -40,6 +40,16 @@ describe("FileTree", () => {
     expect(screen.getByText("readme.md")).toBeTruthy();
   });
 
+  it("resizes the sidebar by dragging its divider", () => {
+    render(<FileTree {...baseProps} />);
+
+    const divider = screen.getByRole("separator", { name: "调整侧边栏宽度" });
+    fireEvent.pointerDown(divider);
+    fireEvent.pointerMove(window, { clientX: 320 });
+
+    expect(divider.getAttribute("aria-valuenow")).toBe("320");
+  });
+
   it("shows a tooltip with the button name on hover", () => {
     render(<FileTree {...baseProps} />);
 

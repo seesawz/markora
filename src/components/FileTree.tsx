@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronRight, FileInput, FilePlus, FileText, Folder, FolderOpen, ListTree } from "lucide-react";
 import type { WorkspaceFile } from "../store/workspaceStore";
 import { OutlinePanel } from "./OutlinePanel";
+
+const DEFAULT_SIDEBAR_WIDTH = 220;
+const MIN_SIDEBAR_WIDTH = 180;
+const MAX_SIDEBAR_WIDTH = 420;
 
 interface FileTreeProps {
   root: string | null;
@@ -86,6 +90,32 @@ function TreeItem({ node, depth, activePath, onOpenFile }: TreeItemProps) {
 
 export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog, onOpenFolder, onNewFile }: FileTreeProps) {
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
+  const [width, setWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
+  const [resizing, setResizing] = useState(false);
+
+  useEffect(() => {
+    if (!resizing) return;
+
+    const resize = (event: PointerEvent) => {
+      setWidth(Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, event.clientX)));
+    };
+    const stopResize = () => setResizing(false);
+
+    window.addEventListener("pointermove", resize);
+    window.addEventListener("pointerup", stopResize, { once: true });
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    return () => {
+      window.removeEventListener("pointermove", resize);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [resizing]);
+
+  const adjustWidth = (delta: number) => {
+    setWidth((value) => Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, value + delta)));
+  };
 
   const showTooltip = (event: React.MouseEvent<HTMLElement>, text: string) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -98,7 +128,7 @@ export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog,
   };
 
   return (
-    <aside className="sidebar" aria-label="文件树">
+    <aside className="sidebar" aria-label="文件树" style={{ width }}>
       <div className="flex items-center gap-1 px-3 py-2">
         {root ? (
           <Folder className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
@@ -175,6 +205,32 @@ export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog,
           ))}
         </div>
       )}
+
+      <div
+        className="sidebar-resize-handle"
+        data-resizing={resizing || undefined}
+        role="separator"
+        aria-label="调整侧边栏宽度"
+        aria-orientation="vertical"
+        aria-valuemin={MIN_SIDEBAR_WIDTH}
+        aria-valuemax={MAX_SIDEBAR_WIDTH}
+        aria-valuenow={width}
+        tabIndex={0}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          setResizing(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowLeft") {
+            event.preventDefault();
+            adjustWidth(-8);
+          }
+          if (event.key === "ArrowRight") {
+            event.preventDefault();
+            adjustWidth(8);
+          }
+        }}
+      />
     </aside>
   );
 }

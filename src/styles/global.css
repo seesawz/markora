@@ -273,12 +273,50 @@ body {
 .sidebar {
   display: flex;
   flex-direction: column;
-  width: 220px;
   height: 100%;
   flex: none;
+  position: relative;
   overflow: hidden;
   border-right: 1px solid var(--border-primary);
   background: var(--bg-primary);
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  z-index: 5;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  transition: background-color 0.15s ease;
+}
+
+.sidebar-resize-handle::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--text-tertiary);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.15s ease, height 0.15s ease;
+}
+
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle[data-resizing="true"],
+.sidebar-resize-handle:focus-visible {
+  background: var(--selection);
+}
+
+.sidebar-resize-handle:hover::before,
+.sidebar-resize-handle[data-resizing="true"]::before,
+.sidebar-resize-handle:focus-visible::before {
+  height: 42px;
+  opacity: 1;
 }
 
 .sidebar-icon-btn {
