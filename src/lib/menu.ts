@@ -23,6 +23,8 @@ export async function rebuildMenu() {
       await MenuItem.new({ id: "save", text: L("保存", "Save"), accelerator: "CmdOrCtrl+S", action: emit("save") }),
       await MenuItem.new({ id: "save_as", text: L("另存为…", "Save As…"), accelerator: "CmdOrCtrl+Shift+S", action: emit("save_as") }),
       await MenuItem.new({ text: "-" }),
+      await MenuItem.new({ id: "close_tab", text: L("关闭标签", "Close Tab"), accelerator: "CmdOrCtrl+W", action: emit("close_tab") }),
+      await MenuItem.new({ text: "-" }),
       await MenuItem.new({ id: "export_html", text: L("导出 HTML…", "Export HTML…"), action: emit("export_html") }),
     ],
   });

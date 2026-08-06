@@ -73,8 +73,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   updateStats: () => {
     const content = get().content;
-    const charCount = content.length;
-    const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
-    set({ charCount, wordCount });
+    // CJK 字符没有空格分词,每个字算一词;其余按空白分词(Obsidian/Word 习惯)
+    const CJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/g;
+    const cjk = content.match(CJK)?.length ?? 0;
+    const latin = content.replace(CJK, " ").trim();
+    const latinWords = latin ? latin.split(/\s+/).length : 0;
+    set({ charCount: content.length, wordCount: cjk + latinWords });
   },
 }));

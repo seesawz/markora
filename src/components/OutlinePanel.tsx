@@ -97,10 +97,12 @@ function OutlineRow({ item, activePath, onJump }: OutlineRowProps) {
 interface OutlinePanelProps {
   onOpenFileDialog: () => void;
   onOpenFolder: () => void;
+  /** 常驻在文件树下方时:空态更简洁,不显示打开按钮 */
+  compact?: boolean;
 }
 
 /** 单文件模式下的文档标题目录：解析当前文档标题，点击跳转，当前节高亮 */
-export function OutlinePanel({ onOpenFileDialog, onOpenFolder }: OutlinePanelProps) {
+export function OutlinePanel({ onOpenFileDialog, onOpenFolder, compact = false }: OutlinePanelProps) {
   const content = useEditorStore((state) => state.content);
   const cursorLine = useEditorStore((state) => state.cursorLine);
 
@@ -132,22 +134,24 @@ export function OutlinePanel({ onOpenFileDialog, onOpenFolder }: OutlinePanelPro
           <p className="text-[12px] leading-relaxed text-[var(--text-tertiary)]">
             {content ? "文档里还没有标题" : "未打开文档"}
           </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="rounded-md border border-[var(--border-primary)] px-3 py-1 text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-hover)]"
-              onClick={onOpenFileDialog}
-            >
-              打开文件
-            </button>
-            <button
-              type="button"
-              className="rounded-md border border-[var(--border-primary)] px-3 py-1 text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-hover)]"
-              onClick={onOpenFolder}
-            >
-              打开文件夹
-            </button>
-          </div>
+          {!compact && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="rounded-md border border-[var(--border-primary)] px-3 py-1 text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-hover)]"
+                onClick={onOpenFileDialog}
+              >
+                打开文件
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-[var(--border-primary)] px-3 py-1 text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-hover)]"
+                onClick={onOpenFolder}
+              >
+                打开文件夹
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="overflow-y-auto pb-4">

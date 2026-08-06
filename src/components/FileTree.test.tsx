@@ -30,6 +30,9 @@ describe("FileTree", () => {
     onOpenFileDialog: vi.fn(),
     onOpenFolder: vi.fn(),
     onNewFile: vi.fn(),
+    onRefresh: vi.fn(),
+    onRename: vi.fn(),
+    onDelete: vi.fn(),
   };
 
   it("renders the workspace root name and files", () => {
@@ -37,7 +40,7 @@ describe("FileTree", () => {
 
     expect(screen.getByText("ws")).toBeTruthy();
     expect(screen.getByText("docs")).toBeTruthy();
-    expect(screen.getByText("readme.md")).toBeTruthy();
+    expect(screen.getByText("readme")).toBeTruthy();
   });
 
   it("resizes the sidebar by dragging its divider", () => {
@@ -72,7 +75,7 @@ describe("FileTree", () => {
     const onOpenFile = vi.fn();
     render(<FileTree {...baseProps} onOpenFile={onOpenFile} />);
 
-    fireEvent.click(screen.getByText("readme.md"));
+    fireEvent.click(screen.getByText("readme"));
     expect(onOpenFile).toHaveBeenCalledWith("/ws/readme.md");
   });
 
@@ -80,8 +83,8 @@ describe("FileTree", () => {
     const onOpenFile = vi.fn();
     render(<FileTree {...baseProps} onOpenFile={onOpenFile} />);
 
-    // 第一层目录默认展开 → 直接看到 note.md
-    fireEvent.click(screen.getByText("note.md"));
+    // 第一层目录默认展开 → 直接看到 note(不显示 .md 后缀)
+    fireEvent.click(screen.getByText("note"));
     expect(onOpenFile).toHaveBeenCalledWith("/ws/docs/note.md");
   });
 
@@ -89,9 +92,9 @@ describe("FileTree", () => {
     render(<FileTree {...baseProps} />);
 
     fireEvent.click(screen.getByText("docs"));
-    expect(screen.queryByText("note.md")).toBeNull();
+    expect(screen.queryByText("note")).toBeNull();
     fireEvent.click(screen.getByText("docs"));
-    expect(screen.getByText("note.md")).toBeTruthy();
+    expect(screen.getByText("note")).toBeTruthy();
   });
 
   it("shows the empty state when there is no tree", () => {
@@ -116,5 +119,57 @@ describe("FileTree", () => {
     expect(screen.getByText("大纲")).toBeTruthy();
     expect(screen.getByText("Hello")).toBeTruthy();
     expect(screen.getByText("World")).toBeTruthy();
+  });
+
+  it("calls onRefresh from the refresh button", () => {
+    const onRefresh = vi.fn();
+    render(<FileTree {...baseProps} onRefresh={onRefresh} />);
+
+    fireEvent.click(screen.getByLabelText("刷新文件树"));
+    expect(onRefresh).toHaveBeenCalledOnce();
+  });
+
+  it("shows the outline alongside the tree in workspace mode", () => {
+    useEditorStore.setState({ content: "# Hello", cursorLine: 1 });
+
+    render(<FileTree {...baseProps} />);
+
+    // 文件树和常驻大纲同时存在
+    expect(screen.getByText("readme")).toBeTruthy();
+    expect(screen.getByText("Hello")).toBeTruthy();
+  });
+
+  it("keeps the collapsed state after the tree data is replaced", () => {
+    const { rerender } = render(<FileTree {...baseProps} />);
+
+    fireEvent.click(screen.getByText("docs"));
+    expect(screen.queryByText("note")).toBeNull();
+
+    // 模拟重新扫描:换一份内容相同但引用全新的 tree
+    rerender(<FileTree {...baseProps} tree={JSON.parse(JSON.stringify(tree))} />);
+    expect(screen.queryByText("note")).toBeNull();
+  });
+
+  it("opens a context menu on right-click and deletes via it", () => {
+    const onDelete = vi.fn();
+    render(<FileTree {...baseProps} onDelete={onDelete} />);
+
+    fireEvent.contextMenu(screen.getByText("readme"));
+    fireEvent.click(screen.getByText("删除文件"));
+    expect(onDelete).toHaveBeenCalledWith("/ws/readme.md", false);
+  });
+
+  it("renames a file inline via the context menu", () => {
+    const onRename = vi.fn();
+    render(<FileTree {...baseProps} onRename={onRename} />);
+
+    fireEvent.contextMenu(screen.getByText("readme"));
+    fireEvent.click(screen.getByText("重命名"));
+
+    const input = screen.getByDisplayValue("readme");
+    fireEvent.change(input, { target: { value: "renamed" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(onRename).toHaveBeenCalledWith("/ws/readme.md", "renamed.md");
   });
 });

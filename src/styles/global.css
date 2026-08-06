@@ -58,6 +58,7 @@
   --code-border: #e4e4e7;
 
   --selection: #18181b1a;
+  --line-highlight: rgba(0, 0, 0, 0.025);
 
   --shadow-sm: 0 2px 10px #0000001a;
   --shadow-md: 0 4px 16.4px #0000001a;
@@ -99,6 +100,7 @@
   --code-border: #27272a;
 
   --selection: #fafafa26;
+  --line-highlight: rgba(255, 255, 255, 0.045);
 
   --shadow-sm: 0 2px 10px #00000066;
   --shadow-md: 0 4px 16.4px #00000066;
@@ -268,6 +270,81 @@ body {
   opacity: 0.5;
 }
 
+/* --- 过渡动画:全部短促克制(120-200ms),只在出现/消失时播放 --- */
+
+@keyframes overlay-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes panel-pop {
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes menu-pop {
+  from { opacity: 0; transform: scale(0.96) translateY(-3px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes tab-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .modal-overlay {
+    animation: overlay-fade 160ms ease-out;
+  }
+
+  .modal-panel {
+    animation: panel-pop 200ms cubic-bezier(0.32, 0.72, 0.35, 1);
+  }
+
+  .context-menu {
+    animation: menu-pop 130ms cubic-bezier(0.32, 0.72, 0.35, 1);
+    transform-origin: top left;
+  }
+
+  .ai-command-popover {
+    animation: slide-down 150ms ease-out;
+  }
+
+  .search-panel {
+    animation: slide-down 150ms ease-out;
+  }
+
+  .sidebar-tooltip {
+    animation: fade-in 120ms ease-out 100ms backwards;
+  }
+
+  .tab-item {
+    animation: tab-in 160ms ease-out;
+  }
+}
+
+/* 标签关闭按钮:默认隐藏,悬停/激活时淡入(Obsidian 同款) */
+.tab-item .tab-close {
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.tab-item:hover .tab-close,
+.tab-item-active .tab-close,
+.tab-close:focus-visible {
+  opacity: 1;
+}
+
 /* --- 工作区侧栏 + 标签栏 --- */
 
 .sidebar {
@@ -379,6 +456,59 @@ body {
   background: var(--bg-selected);
   color: var(--text-primary);
   font-weight: 500;
+}
+
+/* 重命名输入框:Typora 式就地编辑——无任何边框/聚焦环,只留光标闪烁 */
+.tree-rename-input,
+.tab-rename-input {
+  flex: 1;
+  min-width: 0;
+  /* 负边距抵消 padding,文字基线与相邻标签完全对齐,切换不显跳动 */
+  margin: 0 -3px;
+  padding: 0 3px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  caret-color: var(--accent);
+  outline: none;
+  box-shadow: none;
+}
+
+.tree-rename-input {
+  line-height: 18px;
+}
+
+/* 标签重命名:宽度贴合文字内容,不撑满标签。
+   不可见的 ::after 镜像文本负责撑宽,input 叠加在同一格 */
+.tab-rename-wrap {
+  display: inline-grid;
+  flex: none;
+  min-width: 20px;
+  max-width: 100%;
+  font: inherit;
+}
+
+.tab-rename-wrap::after {
+  content: attr(data-value);
+  grid-area: 1 / 1;
+  visibility: hidden;
+  white-space: pre;
+  padding: 0 3px;
+  font: inherit;
+  overflow: hidden;
+}
+
+.tab-rename-input {
+  grid-area: 1 / 1;
+  width: 100%;
+  line-height: 20px;
+}
+
+.tree-rename-input::selection,
+.tab-rename-input::selection {
+  background: var(--selection);
 }
 
 .outline-panel {

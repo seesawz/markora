@@ -23,6 +23,17 @@ fn create_new_file(path: &str) -> Result<(), String> {
     fs::write(path, "").map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn rename_path(from: &str, to: &str) -> Result<(), String> {
+    fs::rename(from, to).map_err(|e| e.to_string())
+}
+
+// 删除走系统回收站,可恢复,避免误删笔记
+#[tauri::command]
+fn trash_path(path: &str) -> Result<(), String> {
+    trash::delete(path).map_err(|e| e.to_string())
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct WorkspaceEntry {
@@ -561,6 +572,8 @@ pub fn run() {
             read_file_content,
             write_file_content,
             create_new_file,
+            rename_path,
+            trash_path,
             scan_workspace,
             save_clipboard_image,
             get_ai_config,

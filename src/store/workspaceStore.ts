@@ -23,6 +23,8 @@ interface WorkspaceState {
   setRoot: (root: string | null) => void;
   setTree: (tree: WorkspaceFile[] | null) => void;
   openTab: (path: string, name: string) => void;
+  /** 文件重命名后同步标签路径 */
+  renameTab: (oldPath: string, newPath: string, newName: string) => void;
   /** 关闭标签，返回新的激活路径（null 表示没有剩余标签） */
   closeTab: (path: string) => string | null;
   setActiveTab: (path: string | null) => void;
@@ -45,6 +47,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       set({ tabs: next.length > MAX_TABS ? next.slice(next.length - MAX_TABS) : next });
     }
     set({ activeTabPath: path });
+  },
+
+  renameTab: (oldPath, newPath, newName) => {
+    const { tabs, activeTabPath } = get();
+    set({
+      tabs: tabs.map((tab) => (tab.path === oldPath ? { path: newPath, name: newName } : tab)),
+      activeTabPath: activeTabPath === oldPath ? newPath : activeTabPath,
+    });
   },
 
   closeTab: (path) => {

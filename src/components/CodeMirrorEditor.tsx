@@ -40,6 +40,7 @@ import { aiGhostTextExtension, clearAiGhost, showAiGhost } from "../lib/aiComple
 import { SearchPanel } from "./SearchPanel";
 import { imagePreview } from "./imagePreview";
 import { normalizeMarkdownSelection, wysiwyg } from "./wysiwyg";
+import { recallSpot } from "../lib/cursorMemory";
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir } from "@tauri-apps/api/path";
 
@@ -136,13 +137,10 @@ const editorTheme = EditorView.theme({
   ".cm-content": {
     caretColor: "var(--accent)",
     userSelect: "text",
-    // 居中阅读栏:与 .typora-content 同宽(760px),两侧自动留白
-    maxWidth: "760px",
-    margin: "0 auto",
     padding: "0",
   },
   ".cm-line": {
-    padding: "0 50px 0 54px",
+    padding: "0 16px",
   },
   ".cm-gutters": {
     backgroundColor: "transparent",
@@ -150,14 +148,14 @@ const editorTheme = EditorView.theme({
     color: "var(--text-tertiary)",
   },
   ".cm-activeLine": {
-    backgroundColor: "rgba(0, 0, 0, 0.022)",
+    backgroundColor: "var(--line-highlight)",
     backgroundClip: "content-box",
   },
   ".cm-activeLineGutter": {
     backgroundColor: "transparent",
   },
   "&.cm-focused .cm-activeLine": {
-    backgroundColor: "rgba(0, 0, 0, 0.03)",
+    backgroundColor: "var(--line-highlight)",
   },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
     backgroundColor: "var(--selection) !important",
@@ -222,7 +220,9 @@ export function CodeMirrorEditor() {
   const completionRequestId = useRef(0);
   const highlightComp = useRef(new Compartment());
   const focusComp = useRef(new Compartment());
+  const historyComp = useRef(new Compartment());
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchSeed, setSearchSeed] = useState<{ query: string; replace: boolean }>({ query: "", replace: false });
   const {
     content,
     setContent,
@@ -266,14 +266,16 @@ export function CodeMirrorEditor() {
     const markdownKeymap = Prec.high(keymap.of([
       {
         key: "Mod-f",
-        run: () => {
+        run: (view) => {
+          setSearchSeed({ query: selectedTextForSearch(view), replace: false });
           setSearchOpen(true);
           return true;
         },
       },
       {
         key: "Mod-h",
-        run: () => {
+        run: (view) => {
+          setSearchSeed({ query: selectedTextForSearch(view), replace: true });
           setSearchOpen(true);
           return true;
         },
@@ -309,7 +311,7 @@ export function CodeMirrorEditor() {
       doc: content,
       extensions: [
         highlightSpecialChars(),
-        history(),
+        historyComp.current.of(history()),
         drawSelection(),
         dropCursor(),
         indentOnInput(),
@@ -370,17 +372,31 @@ export function CodeMirrorEditor() {
   }, []);
 
   useEffect(() => {
-    if (viewRef.current) {
-      const currentContent = viewRef.current.state.doc.toString();
-      if (currentContent !== content && !isDirty) {
-        viewRef.current.dispatch({
-          changes: {
-            from: 0,
-            to: viewRef.current.state.doc.length,
-            insert: content,
-          },
-        });
-      }
+    const view = viewRef.current;
+    if (!view) return;
+    const currentContent = view.state.doc.toString();
+    if (currentContent === content || isDirty) return;
+
+    // 外部加载新文件:整文替换 + 清空 undo 历史(否则会撤销回上一个文件的内容)
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: content },
+      effects: historyComp.current.reconfigure(history()),
+    });
+
+    // 恢复这个文件上次的光标与滚动位置
+    const path = useEditorStore.getState().currentFilePath;
+    const spot = path ? recallSpot(path) : null;
+    if (spot) {
+      const anchor = Math.min(spot.pos, view.state.doc.length);
+      view.dispatch({ selection: { anchor } });
+      requestAnimationFrame(() => {
+        if (viewRef.current === view) view.scrollDOM.scrollTop = spot.scrollTop;
+      });
+    } else {
+      view.dispatch({ selection: { anchor: 0 } });
+      requestAnimationFrame(() => {
+        if (viewRef.current === view) view.scrollDOM.scrollTop = 0;
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, isDirty]);
@@ -424,10 +440,26 @@ export function CodeMirrorEditor() {
     >
       <div ref={editorRef} className="h-full w-full" />
       {searchOpen && (
-        <SearchPanel view={viewRef.current} onClose={() => setSearchOpen(false)} />
+        <SearchPanel
+          view={viewRef.current}
+          initialQuery={searchSeed.query}
+          initialShowReplace={searchSeed.replace}
+          onClose={() => {
+            setSearchOpen(false);
+            viewRef.current?.focus();
+          }}
+        />
       )}
     </div>
   );
+}
+
+// Cmd+F 时把单行选中文本带进搜索框(多行/空选区则不带)
+function selectedTextForSearch(view: EditorView): string {
+  const { from, to } = view.state.selection.main;
+  if (from === to) return "";
+  const text = view.state.sliceDoc(from, to);
+  return text.includes("\n") ? "" : text;
 }
 
 async function requestInlineCompletion(

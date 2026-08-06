@@ -6,19 +6,24 @@ import { useT } from "../lib/i18n";
 interface Props {
   view: EditorView | null;
   onClose: () => void;
+  initialQuery?: string;
+  initialShowReplace?: boolean;
 }
 
-export function SearchPanel({ view, onClose }: Props) {
+export function SearchPanel({ view, onClose, initialQuery = "", initialShowReplace = false }: Props) {
   const tr = useT();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [replace, setReplace] = useState("");
-  const [showReplace, setShowReplace] = useState(false);
+  const [showReplace, setShowReplace] = useState(initialShowReplace);
   const [matchCount, setMatchCount] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
+    // 挂载时应用预选词(.Cmd+F 带入当前选中文本)
+    if (initialQuery) applyQuery(initialQuery, "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const applyQuery = useCallback(
@@ -67,6 +72,7 @@ export function SearchPanel({ view, onClose }: Props) {
 
   return (
     <div
+      className="search-panel"
       style={{
         position: "absolute", top: 12, right: 16, zIndex: 50,
         background: "var(--bg-elevated)",

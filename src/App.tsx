@@ -17,6 +17,7 @@ import { buildCommandPrompt, completeAi, normalizeAiText } from "./lib/ai";
 import { getSelectedDomText, getSelectedText, getTextInputPasteTarget, insertTextAtSelection, trackTextInputFocus } from "./lib/inputOps";
 import { useAiStore } from "./store/aiStore";
 import { useWorkspaceStore, type WorkspaceFile } from "./store/workspaceStore";
+import { forgetSpot, rememberSpot } from "./lib/cursorMemory";
 import { AiCommandModal, type AiCommandStatus } from "./components/AiCommandModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { FileTree } from "./components/FileTree";
@@ -257,6 +258,7 @@ async function confirmDiscardIfDirty(): Promise<boolean> {
 
 async function openFileFromPath(path: string): Promise<void> {
   if (!(await confirmDiscardIfDirty())) return;
+  rememberCurrentSpot();
   try {
     const content = await invoke<string>("read_file_content", { path });
     const store = useEditorStore.getState();
@@ -270,9 +272,26 @@ async function openFileFromPath(path: string): Promise<void> {
   }
 }
 
+// 切走前记住当前文件的光标与滚动位置,切回来时恢复
+function rememberCurrentSpot(): void {
+  const view = (window as any).__cmView as EditorView | null;
+  const { currentFilePath } = useEditorStore.getState();
+  if (view && currentFilePath) {
+    rememberSpot(currentFilePath, {
+      pos: view.state.selection.main.head,
+      scrollTop: view.scrollDOM.scrollTop,
+    });
+  }
+}
+
 export default function App() {
-  const { theme, isDirty } = useEditorStore();
-  const { root, tree, tabs, activeTabPath } = useWorkspaceStore();
+  // 精准订阅:整店订阅会让每次击键(content/cursor 变化)都重渲染整个侧栏
+  const theme = useEditorStore((s) => s.theme);
+  const isDirty = useEditorStore((s) => s.isDirty);
+  const root = useWorkspaceStore((s) => s.root);
+  const tree = useWorkspaceStore((s) => s.tree);
+  const tabs = useWorkspaceStore((s) => s.tabs);
+  const activeTabPath = useWorkspaceStore((s) => s.activeTabPath);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aiCommandOpen, setAiCommandOpen] = useState(false);
@@ -296,6 +315,7 @@ export default function App() {
 
   // 切换/打开新文件前先保存当前文件的未保存修改（切标签不丢内容）
   const flushCurrentFile = async () => {
+    rememberCurrentSpot();
     const { isDirty, currentFilePath, content } = useEditorStore.getState();
     if (isDirty && currentFilePath) {
       try {
@@ -343,10 +363,12 @@ export default function App() {
     }
   };
 
-  const closeTab = async (path: string) => {
+  const closeTab = async (path: string, flush = true) => {
     const ws = useWorkspaceStore.getState();
     const editorOnTab = useEditorStore.getState().currentFilePath === path;
-    if (editorOnTab) await flushCurrentFile();
+    // 删除文件场景(flush=false)不能把脏内容写回去,否则文件又被重建
+    if (editorOnTab && flush) await flushCurrentFile();
+    forgetSpot(path);
     const nextActive = ws.closeTab(path);
     if (!editorOnTab) return;
     if (nextActive) {
@@ -377,6 +399,57 @@ export default function App() {
     } catch (e) {
       console.error("Failed to scan workspace:", e);
     }
+  };
+
+  // 文件树重命名:同步打开中的标签与编辑器路径
+  const handleTreeRename = async (path: string, newName: string) => {
+    // 防御:空名/含路径分隔符/异常值一律拒绝(正常流程在组件层已拦截)
+    const trimmed = (newName ?? "").trim();
+    if (!trimmed || /[\\/]/.test(trimmed)) return;
+    const sep = path.includes("\\") ? "\\" : "/";
+    const dir = path.substring(0, path.lastIndexOf(sep));
+    const newPath = `${dir}${sep}${trimmed}`;
+    if (newPath === path) return;
+    try {
+      await invoke("rename_path", { from: path, to: newPath });
+    } catch (e) {
+      console.error("Failed to rename:", e);
+      return;
+    }
+    const ws = useWorkspaceStore.getState();
+    if (ws.tabs.some((tab) => tab.path === path)) {
+      ws.renameTab(path, newPath, trimmed);
+    }
+    const editor = useEditorStore.getState();
+    if (editor.currentFilePath === path) {
+      editor.setFilePath(newPath);
+    }
+    await refreshWorkspaceTree();
+  };
+
+  // 删除进系统回收站(Rust trash_path);若删的是打开中的文件,关标签但不再回写
+  const handleTreeDelete = async (path: string, isDir: boolean) => {
+    const name = path.split(/[\\/]/).pop() || path;
+    const ok = await ask(
+      isDir
+        ? `确定把文件夹 "${name}" 移入回收站吗?`
+        : `确定把 "${name}" 移入回收站吗?`,
+      { title: "删除确认", kind: "warning", okLabel: "移入回收站", cancelLabel: "取消" }
+    );
+    if (!ok) return;
+    try {
+      await invoke("trash_path", { path });
+    } catch (e) {
+      console.error("Failed to delete:", e);
+      return;
+    }
+    const ws = useWorkspaceStore.getState();
+    const prefix = path + (path.includes("\\") ? "\\" : "/");
+    const affected = ws.tabs.filter((tab) => tab.path === path || tab.path.startsWith(prefix));
+    for (const tab of affected) {
+      await closeTab(tab.path, false);
+    }
+    await refreshWorkspaceTree();
   };
 
   const openFolder = async () => {
@@ -557,6 +630,12 @@ export default function App() {
         openAiCommand();
         return;
       }
+      if (cmd && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        const { activeTabPath } = useWorkspaceStore.getState();
+        if (activeTabPath) void closeTab(activeTabPath);
+        return;
+      }
       if (cmd && e.key === "s") { e.preventDefault(); saveImpl(); }
     };
     document.addEventListener("keydown", onKey);
@@ -592,6 +671,11 @@ export default function App() {
         }
         case "toggle_theme": store.toggleTheme(); break;
         case "toggle_focus": store.toggleFocusMode(); break;
+        case "close_tab": {
+          const { activeTabPath } = useWorkspaceStore.getState();
+          if (activeTabPath) await closeTab(activeTabPath);
+          break;
+        }
         case "close_requested": {
           if (await confirmDiscardIfDirty()) {
             try { await invoke("confirm_close"); } catch (e) { console.error(e); }
@@ -697,6 +781,20 @@ export default function App() {
     };
   }, []);
 
+  // 窗口重新聚焦时刷新文件树,外部(其它编辑器/Finder)的改动能即时反映
+  useEffect(() => {
+    let last = 0;
+    const onFocus = () => {
+      const now = Date.now();
+      if (now - last < 1000) return;
+      last = now;
+      void refreshWorkspaceTree();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY, items: buildEditorMenuItems() });
@@ -716,6 +814,9 @@ export default function App() {
           onOpenFileDialog={() => { void openFileDialog(); }}
           onOpenFolder={() => { void openFolder(); }}
           onNewFile={() => { void newFileInWorkspace(); }}
+          onRefresh={() => { void refreshWorkspaceTree(); }}
+          onRename={(path, newName) => { void handleTreeRename(path, newName); }}
+          onDelete={(path, isDir) => { void handleTreeDelete(path, isDir); }}
         />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <TabBar
@@ -723,6 +824,7 @@ export default function App() {
             activePath={activeTabPath}
             onSelect={(path) => { void selectTab(path); }}
             onClose={(path) => { void closeTab(path); }}
+            onRename={(path, newName) => { void handleTreeRename(path, newName); }}
           />
           <div className="flex-1 overflow-hidden" style={{ position: "relative" }}>
             <div

@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
-import { ChevronRight, FileInput, FilePlus, FileText, Folder, FolderOpen, ListTree } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronRight, FileInput, FilePlus, FileText, Folder, FolderOpen, ListTree, RefreshCw } from "lucide-react";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { splitFileName } from "../lib/utils";
 import type { WorkspaceFile } from "../store/workspaceStore";
+import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { OutlinePanel } from "./OutlinePanel";
 
 const DEFAULT_SIDEBAR_WIDTH = 220;
@@ -15,12 +18,22 @@ interface FileTreeProps {
   onOpenFileDialog: () => void;
   onOpenFolder: () => void;
   onNewFile: () => void;
+  onRefresh: () => void;
+  onRename: (path: string, newName: string) => void;
+  onDelete: (path: string, isDir: boolean) => void;
 }
 
 interface Tooltip {
   text: string;
   x: number;
   y: number;
+}
+
+interface TreeMenu {
+  x: number;
+  y: number;
+  path: string;
+  isDir: boolean;
 }
 
 function rootName(root: string): string {
@@ -32,11 +45,36 @@ interface TreeItemProps {
   node: WorkspaceFile;
   depth: number;
   activePath: string | null;
+  expanded: Record<string, boolean>;
+  renamingPath: string | null;
+  onToggle: (path: string, depth: number) => void;
   onOpenFile: (path: string) => void;
+  onStartRename: (path: string | null) => void;
+  onCommitRename: (path: string, newName: string) => void;
+  onContextMenu: (menu: TreeMenu) => void;
 }
 
-function TreeItem({ node, depth, activePath, onOpenFile }: TreeItemProps) {
-  const [expanded, setExpanded] = useState(depth === 0);
+function TreeItem({ node, depth, activePath, expanded, renamingPath, onToggle, onOpenFile, onStartRename, onCommitRename, onContextMenu }: TreeItemProps) {
+  // 未点过的目录沿用默认规则(顶层展开),点过之后以用户状态为准,刷新文件树不丢折叠状态
+  const expandedValue = expanded[node.path] ?? depth === 0;
+  const renaming = renamingPath === node.path;
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Obsidian 风格:文件只展示主文件名;目录无扩展名概念,原样展示
+  const { base, ext } = node.isDir ? { base: node.name, ext: "" } : splitFileName(node.name);
+
+  useEffect(() => {
+    if (renaming) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [renaming]);
+
+  const commitRename = () => {
+    const value = (inputRef.current?.value ?? "").trim();
+    onStartRename(null);
+    // 输入的只是主文件名,扩展名自动补回
+    if (value && value !== base) onCommitRename(node.path, value + ext);
+  };
 
   if (node.isDir) {
     return (
@@ -45,28 +83,52 @@ function TreeItem({ node, depth, activePath, onOpenFile }: TreeItemProps) {
           type="button"
           className="tree-row"
           style={{ paddingLeft: `${6 + depth * 14}px` }}
-          onClick={() => setExpanded((value) => !value)}
+          onClick={() => onToggle(node.path, depth)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            onContextMenu({ x: e.clientX, y: e.clientY, path: node.path, isDir: true });
+          }}
           title={node.path}
         >
           <ChevronRight
             className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)] transition-transform"
-            style={{ transform: expanded ? "rotate(90deg)" : undefined }}
+            style={{ transform: expandedValue ? "rotate(90deg)" : undefined }}
           />
-          {expanded ? (
+          {expandedValue ? (
             <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
           ) : (
             <Folder className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
           )}
-          <span className="truncate">{node.name}</span>
+          {renaming ? (
+            <input
+              ref={inputRef}
+              className="tree-rename-input"
+              defaultValue={base}
+              onClick={(e) => e.stopPropagation()}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitRename();
+                if (e.key === "Escape") onStartRename(null);
+              }}
+            />
+          ) : (
+            <span className="truncate">{base}</span>
+          )}
         </button>
-        {expanded &&
+        {expandedValue &&
           node.children.map((child) => (
             <TreeItem
               key={child.path}
               node={child}
               depth={depth + 1}
               activePath={activePath}
+              expanded={expanded}
+              renamingPath={renamingPath}
+              onToggle={onToggle}
               onOpenFile={onOpenFile}
+              onStartRename={onStartRename}
+              onCommitRename={onCommitRename}
+              onContextMenu={onContextMenu}
             />
           ))}
       </>
@@ -80,18 +142,39 @@ function TreeItem({ node, depth, activePath, onOpenFile }: TreeItemProps) {
       className={`tree-row ${active ? "tree-row-active" : ""}`}
       style={{ paddingLeft: `${6 + depth * 14 + 14}px` }}
       onClick={() => onOpenFile(node.path)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onContextMenu({ x: e.clientX, y: e.clientY, path: node.path, isDir: false });
+      }}
       title={node.path}
     >
       <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
-      <span className="truncate">{node.name}</span>
+      {renaming ? (
+        <input
+          ref={inputRef}
+          className="tree-rename-input"
+          defaultValue={base}
+          onClick={(e) => e.stopPropagation()}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitRename();
+            if (e.key === "Escape") onStartRename(null);
+          }}
+        />
+      ) : (
+        <span className="truncate">{base}</span>
+      )}
     </button>
   );
 }
 
-export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog, onOpenFolder, onNewFile }: FileTreeProps) {
+export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog, onOpenFolder, onNewFile, onRefresh, onRename, onDelete }: FileTreeProps) {
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [width, setWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [resizing, setResizing] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [renamingPath, setRenamingPath] = useState<string | null>(null);
+  const [menu, setMenu] = useState<TreeMenu | null>(null);
 
   useEffect(() => {
     if (!resizing) return;
@@ -125,6 +208,26 @@ export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog,
       x: Math.min(rect.right + 8, window.innerWidth - width - 8),
       y: rect.top + rect.height / 2,
     });
+  };
+
+  const toggleDir = (path: string, depth: number) => {
+    setExpanded((prev) => ({ ...prev, [path]: !(prev[path] ?? depth === 0) }));
+  };
+
+  const menuItems: MenuItem[] = menu
+    ? [
+        { id: "rename", label: "重命名" },
+        { id: "delete", label: menu.isDir ? "删除文件夹" : "删除文件" },
+        { id: "sep1", separator: true },
+        { id: "reveal", label: "在访达中显示" },
+      ]
+    : [];
+
+  const handleMenuClick = (id: string) => {
+    if (!menu) return;
+    if (id === "rename") setRenamingPath(menu.path);
+    if (id === "delete") onDelete(menu.path, menu.isDir);
+    if (id === "reveal") revealItemInDir(menu.path).catch((e) => console.error("reveal failed:", e));
   };
 
   return (
@@ -168,6 +271,18 @@ export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog,
         >
           <FolderOpen className="h-3.5 w-3.5" />
         </button>
+        {root && (
+          <button
+            type="button"
+            className="sidebar-icon-btn"
+            onClick={onRefresh}
+            onMouseEnter={(e) => showTooltip(e, "刷新")}
+            onMouseLeave={() => setTooltip(null)}
+            aria-label="刷新文件树"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       {tooltip && (
@@ -193,17 +308,43 @@ export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog,
           </button>
         </div>
       ) : (
-        <div className="overflow-y-auto pb-4">
-          {tree.map((node) => (
-            <TreeItem
-              key={node.path}
-              node={node}
-              depth={0}
-              activePath={activePath}
-              onOpenFile={onOpenFile}
-            />
-          ))}
-        </div>
+        <>
+          <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+            {tree.map((node) => (
+              <TreeItem
+                key={node.path}
+                node={node}
+                depth={0}
+                activePath={activePath}
+                expanded={expanded}
+                renamingPath={renamingPath}
+                onToggle={toggleDir}
+                onOpenFile={onOpenFile}
+                onStartRename={setRenamingPath}
+                onCommitRename={onRename}
+                onContextMenu={setMenu}
+              />
+            ))}
+          </div>
+          {/* Obsidian 式常驻大纲:文件夹模式下也能跳转当前文档标题 */}
+          <div className="flex max-h-[45%] flex-none flex-col border-t border-[var(--border-secondary)]">
+            <div className="flex items-center gap-1 px-3 pb-1 pt-2 text-[11px] font-medium text-[var(--text-tertiary)]">
+              <ListTree className="h-3 w-3" />
+              大纲
+            </div>
+            <OutlinePanel compact onOpenFileDialog={onOpenFileDialog} onOpenFolder={onOpenFolder} />
+          </div>
+        </>
+      )}
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={menuItems}
+          onItemClick={handleMenuClick}
+          onClose={() => setMenu(null)}
+        />
       )}
 
       <div

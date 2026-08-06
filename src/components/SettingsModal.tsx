@@ -156,7 +156,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md"
+      className="modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md"
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
       onKeyDown={(event) => event.key === "Escape" && onClose()}
     >
@@ -164,7 +164,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
-        className="relative flex w-[900px] h-[620px] max-w-[calc(100vw-48px)] max-h-[calc(100vh-48px)] overflow-hidden rounded-[20px] border border-border bg-background shadow-none select-text"
+        className="modal-panel relative flex w-[900px] h-[620px] max-w-[calc(100vw-48px)] max-h-[calc(100vh-48px)] overflow-hidden rounded-[20px] border border-border bg-background shadow-none select-text"
       >
         {/* Close button */}
         <button
