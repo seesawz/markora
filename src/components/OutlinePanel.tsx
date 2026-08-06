@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { Heading } from "lucide-react";
 import { useEditorStore } from "../store/editorStore";
 
 export interface OutlineItem {
@@ -72,22 +71,26 @@ interface OutlineRowProps {
 
 function OutlineRow({ item, activePath, onJump }: OutlineRowProps) {
   const active = activePath === item.pos;
+
   return (
-    <>
+    <div className="outline-tree-item">
       <button
         type="button"
-        className={`tree-row ${active ? "tree-row-active" : ""}`}
-        style={{ paddingLeft: `${6 + (item.level - 1) * 14}px` }}
+        className={`outline-row ${active ? "outline-row-active" : ""}`}
         onClick={() => onJump(item.pos)}
         title={item.text}
+        aria-label={`H${item.level} ${item.text}`}
       >
-        <Heading className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
         <span className="truncate">{item.text}</span>
       </button>
-      {item.children.map((child) => (
-        <OutlineRow key={child.pos} item={child} activePath={activePath} onJump={onJump} />
-      ))}
-    </>
+      {item.children.length > 0 && (
+        <div className="outline-tree-children">
+          {item.children.map((child) => (
+            <OutlineRow key={child.pos} item={child} activePath={activePath} onJump={onJump} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -123,9 +126,9 @@ export function OutlinePanel({ onOpenFileDialog, onOpenFolder }: OutlinePanelPro
   };
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="outline-panel flex flex-1 flex-col overflow-hidden">
       {outline.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 px-4 py-6 text-center">
+        <div className="outline-empty flex flex-col items-center gap-2 px-4 py-6 text-center">
           <p className="text-[12px] leading-relaxed text-[var(--text-tertiary)]">
             {content ? "文档里还没有标题" : "未打开文档"}
           </p>

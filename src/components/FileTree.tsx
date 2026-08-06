@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronRight, FileInput, FilePlus, FileText, Folder, FolderOpen } from "lucide-react";
+import { ChevronRight, FileInput, FilePlus, FileText, Folder, FolderOpen, ListTree } from "lucide-react";
 import type { WorkspaceFile } from "../store/workspaceStore";
 import { OutlinePanel } from "./OutlinePanel";
 
@@ -100,7 +100,11 @@ export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog,
   return (
     <aside className="sidebar" aria-label="文件树">
       <div className="flex items-center gap-1 px-3 py-2">
-        <Folder className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
+        {root ? (
+          <Folder className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
+        ) : (
+          <ListTree className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
+        )}
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--text-primary)]">
           {root ? rootName(root) : "大纲"}
         </span>

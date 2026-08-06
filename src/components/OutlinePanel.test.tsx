@@ -66,6 +66,7 @@ describe("OutlinePanel", () => {
 
     expect(screen.getByText("Hello")).toBeTruthy();
     expect(screen.getByText("World")).toBeTruthy();
+    expect(document.querySelector(".outline-tree-children")).toBeTruthy();
   });
 
   it("jumps to the heading position on click", () => {
