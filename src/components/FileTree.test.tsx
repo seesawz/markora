@@ -129,14 +129,14 @@ describe("FileTree", () => {
     expect(onRefresh).toHaveBeenCalledOnce();
   });
 
-  it("shows the outline alongside the tree in workspace mode", () => {
+  it("shows only the tree in workspace mode (no outline)", () => {
     useEditorStore.setState({ content: "# Hello", cursorLine: 1 });
 
     render(<FileTree {...baseProps} />);
 
-    // 文件树和常驻大纲同时存在
+    // 工作区模式下只显示文件树,不显示常驻大纲
     expect(screen.getByText("readme")).toBeTruthy();
-    expect(screen.getByText("Hello")).toBeTruthy();
+    expect(screen.queryByText("Hello")).toBeNull();
   });
 
   it("keeps the collapsed state after the tree data is replaced", () => {

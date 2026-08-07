@@ -1,16 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEditorStore } from "./store/editorStore";
-import { TipTapEditor } from "./components/TipTapEditor";
+import { CodeMirrorEditor, insertClipboardImage } from "./components/CodeMirrorEditor";
 import { StatusBar } from "./components/StatusBar";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { open, save, ask } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { writeText, readText } from "@tauri-apps/plugin-clipboard-manager";
+import { undo, redo } from "@codemirror/commands";
+import type { EditorView } from "@codemirror/view";
 import { renderMarkdown, resolveLocalImages } from "./lib/markdown";
+import { wrapSelection, insertLink } from "./lib/editorOps";
 import { t } from "./lib/i18n";
 import { rebuildMenu } from "./lib/menu";
-import { completeAi, normalizeAiText } from "./lib/ai";
+import { buildCommandPrompt, completeAi, normalizeAiText } from "./lib/ai";
 import { getSelectedDomText, getSelectedText, getTextInputPasteTarget, insertTextAtSelection, trackTextInputFocus } from "./lib/inputOps";
 import { useAiStore } from "./store/aiStore";
 import { useWorkspaceStore, type WorkspaceFile } from "./store/workspaceStore";
@@ -21,11 +24,12 @@ import { FileTree } from "./components/FileTree";
 import { TabBar } from "./components/TabBar";
 import typoraCss from "./styles/typora.css?raw";
 
-// --- 编辑器操作(基于 TipTap,通过 window.__tiptapEditor 访问) ---
-
-function getEditor(): any {
-  return (window as any).__tiptapEditor ?? null;
+function getEditorView(): EditorView | null {
+  if (getTextInputPasteTarget()) return null;
+  return (window as any).__cmView ?? null;
 }
+
+// --- Reusable editor operations ---
 
 async function doCopy(): Promise<void> {
   const input = getTextInputPasteTarget();
@@ -41,12 +45,11 @@ async function doCopy(): Promise<void> {
     try { await writeText(domText); } catch (e) { console.error(e); }
     return;
   }
-  const editor = getEditor();
-  if (editor) {
-    const { from, to } = editor.state.selection;
+  const view = getEditorView();
+  if (view) {
+    const { from, to } = view.state.selection.main;
     if (from !== to) {
-      const text = editor.state.doc.textBetween(from, to);
-      try { await writeText(text); } catch (e) { console.error(e); }
+      try { await writeText(view.state.doc.sliceString(from, to)); } catch (e) { console.error(e); }
     }
   } else {
     document.execCommand("copy");
@@ -65,14 +68,14 @@ async function doCut(): Promise<void> {
     }
     return;
   }
-  const editor = getEditor();
-  if (editor) {
-    const { from, to } = editor.state.selection;
+  const view = getEditorView();
+  if (view) {
+    const { from, to } = view.state.selection.main;
     if (from !== to) {
-      const text = editor.state.doc.textBetween(from, to);
       try {
-        await writeText(text);
-        editor.chain().focus().deleteSelection().run();
+        await writeText(view.state.doc.sliceString(from, to));
+        view.dispatch({ changes: { from, to, insert: "" } });
+        view.focus();
       } catch (e) { console.error(e); }
     }
   }
@@ -87,59 +90,62 @@ async function doPaste(): Promise<void> {
     } catch (e) { console.error(e); }
     return;
   }
-  const editor = getEditor();
-  if (editor) {
+  const view = getEditorView();
+  if (view) {
+    // ponytail: 先尝试剪贴板图片，没有再退回文本
+    if (await insertClipboardImage(view)) return;
     try {
       const text = await readText();
       if (text) {
-        editor.chain().focus().insertContent(text).run();
+        const { from, to } = view.state.selection.main;
+        view.dispatch({
+          changes: { from, to, insert: text },
+          selection: { anchor: from + text.length },
+        });
+        view.focus();
       }
     } catch (e) { console.error(e); }
   }
 }
 
 function doSelectAll(): void {
-  const editor = getEditor();
-  if (editor) {
-    editor.chain().focus().selectAll().run();
+  const view = getEditorView();
+  if (view) {
+    view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
+    view.focus();
   } else {
     document.execCommand("selectAll");
   }
 }
 
 function doUndo(): void {
-  const editor = getEditor();
-  if (editor) editor.chain().focus().undo().run();
+  const view = getEditorView();
+  if (view) { undo(view); view.focus(); }
 }
 
 function doRedo(): void {
-  const editor = getEditor();
-  if (editor) editor.chain().focus().redo().run();
+  const view = getEditorView();
+  if (view) { redo(view); view.focus(); }
 }
 
 function doBold(): void {
-  const editor = getEditor();
-  if (editor) editor.chain().focus().toggleBold().run();
+  const view = getEditorView();
+  if (view) { wrapSelection(view, "**"); view.focus(); }
 }
 
 function doItalic(): void {
-  const editor = getEditor();
-  if (editor) editor.chain().focus().toggleItalic().run();
+  const view = getEditorView();
+  if (view) { wrapSelection(view, "*"); view.focus(); }
 }
 
 function doLink(): void {
-  const editor = getEditor();
-  if (editor) {
-    const url = window.prompt("输入链接地址:");
-    if (url) {
-      editor.chain().focus().setLink({ href: url }).run();
-    }
-  }
+  const view = getEditorView();
+  if (view) { insertLink(view); view.focus(); }
 }
 
 function editorHasSelection(): boolean {
-  const editor = getEditor();
-  return editor ? editor.state.selection.from !== editor.state.selection.to : false;
+  const view = getEditorView();
+  return view ? view.state.selection.main.from !== view.state.selection.main.to : false;
 }
 
 function buildEditorMenuItems(): MenuItem[] {
@@ -159,9 +165,6 @@ function buildEditorMenuItems(): MenuItem[] {
     { id: "link", label: t("insertLink"), shortcut: "⌘K" },
   ];
 }
-
-// 保留 buildEditorMenuItems 供右键菜单使用
-void buildEditorMenuItems;
 
 async function handleContextAction(id: string): Promise<void> {
   switch (id) {
@@ -271,18 +274,20 @@ async function openFileFromPath(path: string): Promise<void> {
 
 // 切走前记住当前文件的光标与滚动位置,切回来时恢复
 function rememberCurrentSpot(): void {
-  const editor = getEditor();
+  const view = (window as any).__cmView as EditorView | null;
   const { currentFilePath } = useEditorStore.getState();
-  if (editor && currentFilePath) {
+  if (view && currentFilePath) {
     rememberSpot(currentFilePath, {
-      pos: editor.state.selection.from,
-      scrollTop: 0, // TipTap 没有 scrollDOM,暂时用 0
+      pos: view.state.selection.main.head,
+      scrollTop: view.scrollDOM.scrollTop,
     });
   }
 }
 
 export default function App() {
+  // 精准订阅:整店订阅会让每次击键(content/cursor 变化)都重渲染整个侧栏
   const theme = useEditorStore((s) => s.theme);
+  const isDirty = useEditorStore((s) => s.isDirty);
   const root = useWorkspaceStore((s) => s.root);
   const tree = useWorkspaceStore((s) => s.tree);
   const tabs = useWorkspaceStore((s) => s.tabs);
@@ -293,6 +298,8 @@ export default function App() {
   const [aiStatus, setAiStatus] = useState<AiCommandStatus>("idle");
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiAnchor, setAiAnchor] = useState<{ x: number; y: number } | null>(null);
+  // ponytail: 打开弹窗时保存编辑器视图引用,避免提交时焦点仍在输入框导致 getEditorView() 返回 null
+  const aiCommandViewRef = useRef<EditorView | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -306,6 +313,7 @@ export default function App() {
 
   // --- 工作区 / 标签 ---
 
+  // 切换/打开新文件前先保存当前文件的未保存修改（切标签不丢内容）
   const flushCurrentFile = async () => {
     rememberCurrentSpot();
     const { isDirty, currentFilePath, content } = useEditorStore.getState();
@@ -358,6 +366,7 @@ export default function App() {
   const closeTab = async (path: string, flush = true) => {
     const ws = useWorkspaceStore.getState();
     const editorOnTab = useEditorStore.getState().currentFilePath === path;
+    // 删除文件场景(flush=false)不能把脏内容写回去,否则文件又被重建
     if (editorOnTab && flush) await flushCurrentFile();
     forgetSpot(path);
     const nextActive = ws.closeTab(path);
@@ -373,6 +382,7 @@ export default function App() {
         store.setDirty(false);
       }
     } else {
+      // 关闭最后一个标签：回到空白文档
       const store = useEditorStore.getState();
       store.setContent("");
       store.setFilePath(null);
@@ -391,7 +401,9 @@ export default function App() {
     }
   };
 
+  // 文件树重命名:同步打开中的标签与编辑器路径
   const handleTreeRename = async (path: string, newName: string) => {
+    // 防御:空名/含路径分隔符/异常值一律拒绝(正常流程在组件层已拦截)
     const trimmed = (newName ?? "").trim();
     if (!trimmed || /[\\/]/.test(trimmed)) return;
     const sep = path.includes("\\") ? "\\" : "/";
@@ -415,6 +427,7 @@ export default function App() {
     await refreshWorkspaceTree();
   };
 
+  // 删除进系统回收站(Rust trash_path);若删的是打开中的文件,关标签但不再回写
   const handleTreeDelete = async (path: string, isDir: boolean) => {
     const name = path.split(/[\\/]/).pop() || path;
     const ok = await ask(
@@ -471,10 +484,15 @@ export default function App() {
   };
 
   const openAiCommand = () => {
-    const editor = getEditor();
-    if (editor) {
-      // TipTap 没有 coordsAtPos,用简单定位
-      setAiAnchor({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+    const view = (window as any).__cmView as EditorView | null;
+    aiCommandViewRef.current = view;
+    if (view) {
+      const rect = view.coordsAtPos(view.state.selection.main.head);
+      setAiAnchor(
+        rect
+          ? { x: rect.left, y: rect.bottom }
+          : { x: Math.round(window.innerWidth / 2), y: Math.round(window.innerHeight / 2) },
+      );
     } else {
       setAiAnchor(null);
     }
@@ -485,12 +503,12 @@ export default function App() {
 
   const closeAiCommand = () => {
     setAiCommandOpen(false);
-    getEditor()?.commands.focus();
+    aiCommandViewRef.current?.focus();
   };
 
   const handleAiCommand = async (instruction: string) => {
-    const editor = getEditor();
-    if (!editor) {
+    const view = aiCommandViewRef.current;
+    if (!view) {
       setAiError("无法定位编辑器，请重试。");
       setAiStatus("error");
       return;
@@ -502,8 +520,8 @@ export default function App() {
       return;
     }
 
-    const { to } = editor.state.selection;
-    const source = editor.getText();
+    const { from, to } = view.state.selection.main;
+    const source = view.state.doc.toString();
     setAiStatus("generating");
     setAiError(null);
     currentAi.setGenerating(true);
@@ -513,14 +531,18 @@ export default function App() {
         provider: currentAi.provider,
         baseUrl: currentAi.baseUrl,
         model: currentAi.model,
-        prompt: `请根据以下指令处理文本：${instruction}\n\n当前文本：${source}`,
+        prompt: buildCommandPrompt(view, instruction),
       });
-      if (editor.getText() !== source) {
+      if (view.state.doc.toString() !== source) {
         throw new Error("文档在生成期间发生了变化，请重试。");
       }
       const text = normalizeAiText(raw);
       if (!text) throw new Error("AI 返回了空内容。");
-      editor.chain().focus().insertContentAt(to, text).run();
+      view.dispatch({
+        changes: { from, to, insert: text },
+        selection: { anchor: from + text.length },
+      });
+      view.focus();
       setAiCommandOpen(false);
       setAiStatus("idle");
     } catch (error) {
@@ -532,7 +554,7 @@ export default function App() {
     }
   };
 
-  // Restore last session
+  // Restore last session (file + UI prefs), build native menu, then persist on change
   useEffect(() => {
     try {
       const raw = localStorage.getItem("markora:session");
@@ -542,6 +564,7 @@ export default function App() {
         if (s.theme) store.setTheme(s.theme);
         if (s.lang) store.setLang(s.lang);
         if (s.currentFilePath) {
+          // reopen the file only if no CLI/dropped file is pending
           invoke<string[]>("take_pending_files").then(async (pending) => {
             if (!pending || pending.length === 0) {
               try {
@@ -554,128 +577,303 @@ export default function App() {
                 useWorkspaceStore.getState().openTab(s.currentFilePath, name);
               } catch { /* file gone */ }
             } else {
-              for (const p of pending) await openFileFromPath(p);
+              void openFileFromPath(pending[0]);
             }
-          });
+          }).catch(() => {});
         }
       }
+
+      // 恢复上次的工作区文件夹并重新扫描文件树
+      const savedRoot = localStorage.getItem("markora:workspace");
+      if (savedRoot) {
+        useWorkspaceStore.getState().setRoot(savedRoot);
+        invoke<WorkspaceFile[]>("scan_workspace", { root: savedRoot })
+          .then((tree) => useWorkspaceStore.getState().setTree(tree))
+          .catch(() => useWorkspaceStore.getState().setTree([]));
+      }
     } catch {}
+
+    // JS 接管原生菜单（设置页语言切换时重建）
+    rebuildMenu().catch((e) => console.error("build menu failed:", e));
+
+    // ponytail: 每次击键都会进这个订阅,防抖 500ms 再写 localStorage
+    let persistTimer: number | null = null;
+    const unsub = useEditorStore.subscribe((s) => {
+      if (persistTimer !== null) window.clearTimeout(persistTimer);
+      persistTimer = window.setTimeout(() => {
+        try {
+          localStorage.setItem("markora:session", JSON.stringify({
+            currentFilePath: s.currentFilePath,
+            theme: s.theme,
+            lang: s.lang,
+          }));
+        } catch {}
+      }, 500);
+    });
+    return () => {
+      if (persistTimer !== null) window.clearTimeout(persistTimer);
+      unsub();
+    };
   }, []);
 
-  // Build native menu
   useEffect(() => {
-    rebuildMenu().catch(console.error);
-  }, []);
+    const onKey = (e: KeyboardEvent) => {
+      const cmd = e.metaKey || e.ctrlKey;
+      if (getTextInputPasteTarget()) return;
+      if (cmd && e.key === ",") {
+        e.preventDefault();
+        setSettingsOpen(true);
+        return;
+      }
+      if (cmd && e.shiftKey && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        openAiCommand();
+        return;
+      }
+      if (cmd && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        const { activeTabPath } = useWorkspaceStore.getState();
+        if (activeTabPath) void closeTab(activeTabPath);
+        return;
+      }
+      if (cmd && e.key === "s") { e.preventDefault(); saveImpl(); }
+    };
+    document.addEventListener("keydown", onKey);
+    const trackFocus = (event: FocusEvent) => trackTextInputFocus(event.target);
+    document.addEventListener("focusin", trackFocus, true);
 
-  // Listen for menu events
-  useEffect(() => {
-    const unlisten = listen("menu-event", async (event) => {
-      const id = event.payload as string;
+    // shared handler for native menu events (from Rust menu or JS-rebuilt menu)
+    const handleMenuId = async (id: string) => {
+      const store = useEditorStore.getState();
       switch (id) {
-        case "new_file": newFileInWorkspace(); break;
-        case "open_file": openFileDialog(); break;
-        case "open_folder": openFolder(); break;
-        case "save": saveImpl(); break;
-        case "export_html": exportHtml(); break;
+        case "open_settings": setSettingsOpen(true); break;
         case "ai_command": openAiCommand(); break;
-        case "settings": setSettingsOpen(true); break;
-        case "bold": doBold(); break;
-        case "italic": doItalic(); break;
-        case "link": doLink(); break;
-        case "undo": doUndo(); break;
-        case "redo": doRedo(); break;
-        case "cut": doCut(); break;
-        case "copy": doCopy(); break;
-        case "paste": doPaste(); break;
-        case "select_all": doSelectAll(); break;
-        case "close_requested":
+        case "new_file": await newFileInWorkspace(); break;
+        case "open_file": {
+          const selected = await open({ multiple: false, filters: [{ name: "Markdown", extensions: ["md", "markdown"] }] });
+          if (!selected) break;
+          await openFileInWorkspace(selected as string);
+          break;
+        }
+        case "open_folder": await openFolder(); break;
+        case "save": await saveImpl(); break;
+        case "save_as": {
+          const selected = await save({
+            defaultPath: store.currentFileName,
+            filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
+          });
+          if (!selected) break;
+          try {
+            await invoke("write_file_content", { path: selected, content: store.content });
+            store.setFilePath(selected);
+          } catch (e) { console.error(e); }
+          break;
+        }
+        case "toggle_theme": store.toggleTheme(); break;
+        case "toggle_focus": store.toggleFocusMode(); break;
+        case "close_tab": {
+          const { activeTabPath } = useWorkspaceStore.getState();
+          if (activeTabPath) await closeTab(activeTabPath);
+          break;
+        }
+        case "close_requested": {
           if (await confirmDiscardIfDirty()) {
             try { await invoke("confirm_close"); } catch (e) { console.error(e); }
           }
           break;
+        }
+        case "copy": await doCopy(); break;
+        case "cut": await doCut(); break;
+        case "paste": await doPaste(); break;
+        case "select_all": doSelectAll(); break;
+        case "undo": doUndo(); break;
+        case "redo": doRedo(); break;
+        case "export_html": await exportHtml(); break;
+      }
+    };
+
+    // from Rust native menu (initial)
+    const unlisten = listen<string>("menu-event", (e) => { void handleMenuId(e.payload); });
+    // from JS-rebuilt menu (after language switch)
+    const onNativeMenu = (e: Event) => { void handleMenuId((e as CustomEvent<string>).detail); };
+    window.addEventListener("native-menu", onNativeMenu);
+
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("focusin", trackFocus, true);
+      window.removeEventListener("native-menu", onNativeMenu);
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  // Handle files dropped onto the window and files queued from CLI / OS "Open with…"
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const pending = await invoke<string[]>("take_pending_files");
+        if (!cancelled && pending && pending.length > 0) {
+          await openFileFromPath(pending[0]);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+
+    const unlistenDrop = listen<string[]>("files-dropped", async (event) => {
+      const paths = event.payload;
+      if (paths && paths.length > 0) {
+        await openFileFromPath(paths[0]);
       }
     });
-    return () => { unlisten.then((f) => f()); };
+
+    return () => {
+      cancelled = true;
+      unlistenDrop.then((fn) => fn());
+    };
   }, []);
 
-  // Persist session
+  // AI 指令输入框跟随光标:编辑器/窗口滚动或缩放时重新计算锚点
   useEffect(() => {
-    const unsub = useEditorStore.subscribe((s) => {
-      try {
-        localStorage.setItem("markora:session", JSON.stringify({
-          theme: s.theme,
-          lang: s.lang,
-          currentFilePath: s.currentFilePath,
-        }));
-      } catch {}
+    if (!aiCommandOpen) return;
+    const updateAnchor = () => {
+      const view = aiCommandViewRef.current;
+      if (!view) return;
+      const rect = view.coordsAtPos(view.state.selection.main.head);
+      if (rect) setAiAnchor({ x: rect.left, y: rect.bottom });
+    };
+    window.addEventListener("scroll", updateAnchor, true);
+    window.addEventListener("resize", updateAnchor);
+    return () => {
+      window.removeEventListener("scroll", updateAnchor, true);
+      window.removeEventListener("resize", updateAnchor);
+    };
+  }, [aiCommandOpen]);
+
+  // Auto-save: 1.5s after the last edit, if we have a file path and there are unsaved changes
+  useEffect(() => {
+    let timer: number | null = null;
+    const scheduleSave = () => {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(async () => {
+        const { isDirty, currentFilePath, content, setDirty } = useEditorStore.getState();
+        if (isDirty && currentFilePath) {
+          try {
+            await invoke("write_file_content", { path: currentFilePath, content });
+            setDirty(false);
+          } catch (e) {
+            console.error("Auto-save failed:", e);
+          }
+        }
+      }, 1500);
+    };
+
+    const unsubscribe = useEditorStore.subscribe((state, prev) => {
+      if (state.content !== prev.content && state.isDirty && state.currentFilePath) {
+        scheduleSave();
+      }
     });
-    return unsub;
+
+    return () => {
+      if (timer !== null) window.clearTimeout(timer);
+      unsubscribe();
+    };
   }, []);
 
-  // Track text input focus for paste target detection
+  // 窗口重新聚焦时刷新文件树,外部(其它编辑器/Finder)的改动能即时反映
   useEffect(() => {
-    const handler = (e: FocusEvent) => trackTextInputFocus(e.target);
-    document.addEventListener("focusin", handler);
-    return () => document.removeEventListener("focusin", handler);
+    let last = 0;
+    const onFocus = () => {
+      const now = Date.now();
+      if (now - last < 1000) return;
+      last = now;
+      void refreshWorkspaceTree();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, items: buildEditorMenuItems() });
+  };
 
   return (
-    <div className="h-full w-full flex flex-col" style={{ background: "var(--bg-primary)" }}>
-      <TabBar
-        tabs={tabs}
-        activePath={activeTabPath}
-        onSelect={selectTab}
-        onClose={(path) => closeTab(path)}
-        onRename={async (path, newName) => {
-          // TabBar 重命名:更新 workspaceStore 中的标签名
-          const ws = useWorkspaceStore.getState();
-          ws.renameTab(path, path, newName);
-        }}
-      />
-      <div className="flex-1 flex min-h-0">
+    <div className="flex flex-col h-screen w-screen overflow-hidden" style={{
+      background: "var(--bg-primary)",
+      position: "relative",
+    }}>
+      <div className="flex flex-1 overflow-hidden">
         <FileTree
           root={root}
           tree={tree}
-          activePath={useEditorStore.getState().currentFilePath}
-          onOpenFile={openFileInWorkspace}
-          onOpenFileDialog={openFileDialog}
-          onOpenFolder={openFolder}
-          onNewFile={newFileInWorkspace}
-          onRefresh={refreshWorkspaceTree}
-          onRename={handleTreeRename}
-          onDelete={handleTreeDelete}
+          activePath={activeTabPath}
+          onOpenFile={(path) => { void openFileInWorkspace(path); }}
+          onOpenFileDialog={() => { void openFileDialog(); }}
+          onOpenFolder={() => { void openFolder(); }}
+          onNewFile={() => { void newFileInWorkspace(); }}
+          onRefresh={() => { void refreshWorkspaceTree(); }}
+          onRename={(path, newName) => { void handleTreeRename(path, newName); }}
+          onDelete={(path, isDir) => { void handleTreeDelete(path, isDir); }}
         />
-        <div className="flex-1 min-w-0 relative">
-          <TipTapEditor />
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <TabBar
+            tabs={tabs}
+            activePath={activeTabPath}
+            onSelect={(path) => { void selectTab(path); }}
+            onClose={(path) => { void closeTab(path); }}
+            onRename={(path, newName) => { void handleTreeRename(path, newName); }}
+          />
+          <div className="flex-1 overflow-hidden" style={{ position: "relative" }}>
+            <div
+              style={{ position: "relative", zIndex: 1, height: "100%" }}
+              onContextMenu={handleContextMenu}
+            >
+              <CodeMirrorEditor />
+              {isDirty && (
+                <div
+                  title={t("unsavedTitle")}
+                  style={{
+                    position: "absolute",
+                    top: 14,
+                    right: 18,
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    background: "var(--accent)",
+                    boxShadow: "0 0 0 3px var(--accent-light)",
+                    zIndex: 20,
+                    pointerEvents: "none",
+                  }}
+                />
+              )}
+            </div>
+          </div>
         </div>
       </div>
-      <StatusBar onOpenSettings={() => setSettingsOpen(true)} />
-
+      <StatusBar
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
           items={contextMenu.items}
-          onItemClick={(id) => {
-            handleContextAction(id);
-            setContextMenu(null);
-          }}
+          onItemClick={(id) => { void handleContextAction(id); }}
           onClose={() => setContextMenu(null)}
         />
       )}
-
-      {settingsOpen && <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
-
-      {aiCommandOpen && (
-        <AiCommandModal
-          open={aiCommandOpen}
-          anchor={aiAnchor}
-          status={aiStatus}
-          error={aiError}
-          onSubmit={handleAiCommand}
-          onClose={closeAiCommand}
-        />
-      )}
+      <AiCommandModal
+        open={aiCommandOpen}
+        anchor={aiAnchor}
+        status={aiStatus}
+        error={aiError}
+        onClose={closeAiCommand}
+        onSubmit={(instruction) => { void handleAiCommand(instruction); }}
+      />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

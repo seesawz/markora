@@ -121,10 +121,31 @@ export function OutlinePanel({ onOpenFileDialog, onOpenFolder, compact = false }
   }, [content, cursorLine, outline]);
 
   const jumpTo = (pos: number) => {
-    const view = (window as any).__cmView as { dispatch: (t: unknown) => void; focus: () => void } | null;
-    if (!view) return;
-    view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
-    view.focus();
+    const editor = (window as any).__tiptapEditor;
+    if (!editor) return;
+    // 找到对应的标题项
+    const item = flatten(outline).find((i) => i.pos === pos);
+    if (!item) return;
+    // 在文档中查找标题节点
+    let found = false;
+    editor.state.doc.descendants((node: any, nodePos: number) => {
+      if (found) return false;
+      if (node.type.name === "heading" && node.textContent.trim() === item.text) {
+        editor.chain().focus().setTextSelection(nodePos + 1).run();
+        // 滚动到可见区域
+        const { view } = editor;
+        const coords = view.coordsAtPos(nodePos);
+        if (coords) {
+          const editorDOM = view.dom.closest('.tiptap-editor');
+          if (editorDOM) {
+            editorDOM.scrollTop = coords.top - 100;
+          }
+        }
+        found = true;
+        return false;
+      }
+      return true;
+    });
   };
 
   return (

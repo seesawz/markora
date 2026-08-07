@@ -726,3 +726,172 @@ body {
   font-size: 12px;
   white-space: nowrap;
 }
+
+/* --- TipTap 编辑器 --- */
+
+.tiptap-editor {
+  height: 100%;
+  width: 100%;
+  padding: 24px 16px 140px;
+  overflow-y: auto;
+  font-size: 16px;
+  line-height: 1.8;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.tiptap-editor:focus {
+  outline: none;
+}
+
+.tiptap-editor p {
+  margin: 0 0 0.5em;
+}
+
+.tiptap-editor h1,
+.tiptap-editor h2,
+.tiptap-editor h3,
+.tiptap-editor h4,
+.tiptap-editor h5,
+.tiptap-editor h6 {
+  margin: 1em 0 0.5em;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.tiptap-editor h1 { font-size: 22px; letter-spacing: -0.02em; }
+.tiptap-editor h2 { font-size: 20px; letter-spacing: -0.015em; }
+.tiptap-editor h3 { font-size: 18px; font-weight: 650; letter-spacing: -0.01em; }
+.tiptap-editor h4 { font-size: 16px; font-weight: 650; }
+.tiptap-editor h5 { font-size: 15px; font-weight: 650; }
+.tiptap-editor h6 { font-size: 14px; font-weight: 650; }
+
+.tiptap-editor blockquote {
+  margin: 0.5em 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--border-primary);
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.tiptap-editor ul,
+.tiptap-editor ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.tiptap-editor li {
+  margin: 0.25em 0;
+}
+
+.tiptap-editor code {
+  padding: 0.15em 0.3em;
+  border-radius: 4px;
+  background: var(--code-bg);
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.875em;
+  color: #986801;
+}
+
+:root.dark .tiptap-editor code {
+  color: #d9a45c;
+}
+
+.tiptap-editor pre {
+  margin: 0.5em 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  overflow-x: auto;
+}
+
+.tiptap-editor pre code {
+  padding: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.tiptap-editor a {
+  color: #1783ff;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tiptap-editor img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.tiptap-editor hr {
+  margin: 1em 0;
+  border: none;
+  border-top: 1px solid var(--border-primary);
+}
+
+.tiptap-editor ::selection {
+  background: var(--selection);
+}
+
+/* 自定义光标修复 */
+.tiptap-cursor-fix {
+  display: inline-block;
+  width: 2px;
+  height: 1.2em;
+  background: var(--accent);
+  vertical-align: text-bottom;
+  margin: 0 -1px;
+  pointer-events: none;
+  animation: tiptap-cursor-blink 1s step-end infinite;
+}
+
+@keyframes tiptap-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* 自定义选区背景 */
+.tiptap-selection-fix {
+  background: var(--selection);
+  border-radius: 2px;
+}
+
+.tiptap-editor .ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+}
+
+/* Placeholder */
+.tiptap-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--text-tertiary);
+}
+
+/* 任务列表 */
+.tiptap-editor ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.tiptap-editor ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.tiptap-editor ul[data-type="taskList"] li > label {
+  margin-top: 2px;
+}
+
+.tiptap-editor ul[data-type="taskList"] li > div {
+  flex: 1;
+}

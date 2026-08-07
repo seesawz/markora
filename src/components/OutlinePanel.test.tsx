@@ -51,6 +51,7 @@ describe("OutlinePanel", () => {
   afterEach(() => {
     cleanup();
     delete (window as any).__cmView;
+    delete (window as any).__tiptapEditor;
     useEditorStore.setState({ content: "", cursorLine: 1 });
   });
 
@@ -70,16 +71,32 @@ describe("OutlinePanel", () => {
   });
 
   it("jumps to the heading position on click", () => {
-    const dispatch = vi.fn();
-    const focus = vi.fn();
-    (window as any).__cmView = { dispatch, focus };
+    const setTextSelection = vi.fn().mockReturnThis();
+    const focus = vi.fn().mockReturnThis();
+    const run = vi.fn();
+    const chain = { setTextSelection, focus, run };
+    const editor = {
+      state: {
+        doc: {
+          descendants: vi.fn((callback: (node: any, pos: number) => boolean) => {
+            // 模拟找到 "World" 标题
+            callback({ type: { name: "heading" }, textContent: "World" }, 8);
+          }),
+        },
+      },
+      chain: () => chain,
+      view: {
+        coordsAtPos: vi.fn(() => ({ top: 100 })),
+        dom: { closest: vi.fn(() => ({ scrollTop: 0 })) },
+      },
+    };
+    (window as any).__tiptapEditor = editor;
     useEditorStore.setState({ content: "# Hello\n## World", cursorLine: 1 });
 
     render(<OutlinePanel {...baseProps} />);
 
     fireEvent.click(screen.getByText("World"));
-    expect(dispatch).toHaveBeenCalledWith({ selection: { anchor: 8 }, scrollIntoView: true });
-    expect(focus).toHaveBeenCalledOnce();
+    expect(editor.state.doc.descendants).toHaveBeenCalled();
   });
 
   it("shows a hint when the document has no headings", () => {

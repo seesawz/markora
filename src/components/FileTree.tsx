@@ -308,33 +308,24 @@ export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog,
           </button>
         </div>
       ) : (
-        <>
-          <div className="min-h-0 flex-1 overflow-y-auto pb-2">
-            {tree.map((node) => (
-              <TreeItem
-                key={node.path}
-                node={node}
-                depth={0}
-                activePath={activePath}
-                expanded={expanded}
-                renamingPath={renamingPath}
-                onToggle={toggleDir}
-                onOpenFile={onOpenFile}
-                onStartRename={setRenamingPath}
-                onCommitRename={onRename}
-                onContextMenu={setMenu}
-              />
-            ))}
-          </div>
-          {/* Obsidian 式常驻大纲:文件夹模式下也能跳转当前文档标题 */}
-          <div className="flex max-h-[45%] flex-none flex-col border-t border-[var(--border-secondary)]">
-            <div className="flex items-center gap-1 px-3 pb-1 pt-2 text-[11px] font-medium text-[var(--text-tertiary)]">
-              <ListTree className="h-3 w-3" />
-              大纲
-            </div>
-            <OutlinePanel compact onOpenFileDialog={onOpenFileDialog} onOpenFolder={onOpenFolder} />
-          </div>
-        </>
+        // 工作区模式：只显示文件树（大纲仅在无工作区时显示）
+        <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+          {tree.map((node) => (
+            <TreeItem
+              key={node.path}
+              node={node}
+              depth={0}
+              activePath={activePath}
+              expanded={expanded}
+              renamingPath={renamingPath}
+              onToggle={toggleDir}
+              onOpenFile={onOpenFile}
+              onStartRename={setRenamingPath}
+              onCommitRename={onRename}
+              onContextMenu={setMenu}
+            />
+          ))}
+        </div>
       )}
 
       {menu && (

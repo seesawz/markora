@@ -131,24 +131,33 @@ function buildWysiwygDecos(state: EditorState): DecorationSet {
   const add = (from: number, to: number, decoration: Decoration) => {
     decorations.push({ from, to, decoration });
   };
+
   const tree = syntaxTree(state);
 
-  // 这些范围同时供选区归一化和删除逻辑使用，避免渲染态与编辑态出现不同边界。
-  for (const span of getFormattedSpans(state)) {
-    if (span.kind === "heading") {
-      const line = state.doc.lineAt(span.outerFrom);
-      const prefix = state.doc.sliceString(span.outerFrom, span.contentFrom);
-      const level = Math.min(6, Math.max(1, prefix.match(/^#+/)?.[0].length ?? 1));
-      add(line.from, line.from, Decoration.line({ attributes: { class: `cm-md-h${level}` } }));
-    }
-    if (!shouldRevealMarkdownMarks(state, span.outerFrom, span.outerTo)) {
-      for (const range of span.markRanges) hide(decorations, range.from, range.to);
-    }
-  }
-
+  // 单次遍历:同时处理 inline span 和 block 级装饰,避免 getFormattedSpans + tree.iterate 两次全文扫描
   tree.iterate({
     enter(node) {
       const { from, to, name } = node;
+
+      // ---- ATX 标题:加行样式 + 隐藏 # 前缀 ----
+      const atxMatch = /^ATXHeading([1-6])$/.exec(name);
+      if (atxMatch) {
+        const level = atxMatch[1];
+        const line = state.doc.lineAt(from);
+        add(line.from, line.from, Decoration.line({ attributes: { class: `cm-md-h${level}` } }));
+        if (!shouldRevealMarkdownMarks(state, from, to)) {
+          const mark = node.node.getChild("HeaderMark");
+          if (mark) {
+            // 隐藏 # 前缀到内容开始
+            let contentFrom = mark.to;
+            while (contentFrom < line.to && state.doc.sliceString(contentFrom, contentFrom + 1) === " ") {
+              contentFrom += 1;
+            }
+            hide(decorations, mark.from, contentFrom);
+          }
+        }
+        return false;
+      }
 
       // ---- Setext 标题(=== / ---):隐藏下划标记行 ----
       if (name === "SetextHeading1" || name === "SetextHeading2") {
@@ -165,15 +174,31 @@ function buildWysiwygDecos(state: EditorState): DecorationSet {
         return false;
       }
 
+      // ---- 行内格式:strong / emphasis / strike / code ----
+      const inlineFormats: Record<string, { kind: string; markName: string }> = {
+        StrongEmphasis: { kind: "strong", markName: "EmphasisMark" },
+        Emphasis: { kind: "emphasis", markName: "EmphasisMark" },
+        Strikethrough: { kind: "strike", markName: "StrikethroughMark" },
+        InlineCode: { kind: "code", markName: "CodeMark" },
+      };
+      const format = inlineFormats[name];
+      if (format) {
+        if (!shouldRevealMarkdownMarks(state, from, to)) {
+          const marks = node.node.getChildren(format.markName);
+          for (const mark of marks) {
+            hide(decorations, mark.from, mark.to);
+          }
+        }
+        return false;
+      }
+
       // ---- 链接:只显示文字,隐藏 [ ] ( url ) ----
       if (name === "Link") {
         if (!shouldRevealMarkdownMarks(state, from, to)) {
-          // 结构: [ text ] ( url ) —— 找 LinkMark 和 URL
           const marks = node.node.getChildren("LinkMark");
           const url = node.node.getChild("URL");
           if (marks.length >= 2) {
-            hide(decorations, marks[0].from, marks[0].to); // [
-            // 从 ]( 到 url 结束 ) 全隐藏
+            hide(decorations, marks[0].from, marks[0].to);
             const closeBracket = marks[1];
             const end = url ? Math.max(url.to, closeBracket.to) : closeBracket.to;
             const lastMark = marks[marks.length - 1];
@@ -190,7 +215,7 @@ function buildWysiwygDecos(state: EditorState): DecorationSet {
       if (name === "QuoteMark") {
         const line = state.doc.lineAt(from);
         if (!shouldRevealMarkdownMarks(state, line.from, line.to)) {
-          hide(decorations, from, Math.min(to + 1, line.to)); // ">" + 后面的空格
+          hide(decorations, from, Math.min(to + 1, line.to));
         }
         return false;
       }
@@ -255,7 +280,9 @@ const wysiwygField = StateField.define<DecorationSet>({
   },
   update(deco, tr) {
     const editingChanged = tr.effects.some((effect) => effect.is(commitMarkdownEditing));
-    if (!tr.docChanged && !tr.selection && !editingChanged) return deco.map(tr.changes);
+
+    // 文档变化或编辑状态变化时全文重建(单次遍历,已优化);纯选区变化只 map
+    if (!tr.docChanged && !editingChanged) return deco.map(tr.changes);
     return buildWysiwygDecos(tr.state);
   },
   provide: (f) => [

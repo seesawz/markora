@@ -1,4 +1,5 @@
 import { Menu, MenuItem, Submenu } from "@tauri-apps/api/menu";
+import { emit as emitEvent } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEditorStore } from "../store/editorStore";
 
@@ -8,7 +9,7 @@ export async function rebuildMenu() {
   const zh = lang === "zh";
 
   const emit = (id: string) => async () => {
-    window.dispatchEvent(new CustomEvent("native-menu", { detail: id }));
+    await emitEvent("menu-event", id);
   };
 
   const L = (z: string, e: string) => (zh ? z : e);
