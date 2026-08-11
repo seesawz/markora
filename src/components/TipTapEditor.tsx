@@ -12,7 +12,6 @@ import { useAiStore } from "../store/aiStore";
 import { markdownToTiptap, tiptapToMarkdown } from "../lib/markdownSerializer";
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir } from "@tauri-apps/api/path";
-import { SelectionFix } from "./tiptapSelectionFix";
 import { SearchPanel } from "./SearchPanel";
 
 // 从 TipTap Editor 获取纯文本（用于统计）
@@ -27,28 +26,35 @@ function getMarkdownFromEditor(editor: Editor): string {
 }
 
 export function TipTapEditor() {
-  const {
-    content,
-    setContent,
-    theme,
-    setCursor,
-    isDirty,
-  } = useEditorStore();
+  // 字段级订阅:光标/字数等高频变化不会重渲染编辑器本体
+  const content = useEditorStore((s) => s.content);
+  const theme = useEditorStore((s) => s.theme);
+  const isDirty = useEditorStore((s) => s.isDirty);
 
   const isDark = theme === "dark";
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchSeed, setSearchSeed] = useState<{ query: string; replace: boolean }>({ query: "", replace: false });
   const editorRef = useRef<Editor | null>(null);
   const contentTimer = useRef<number | null>(null);
+  const cursorRaf = useRef<number | null>(null);
+
+  // 拖拽选择时 selection 每次 mousemove 都变,用 rAF 合帧后再写入 store
+  const reportCursor = () => {
+    if (cursorRaf.current !== null) return;
+    cursorRaf.current = requestAnimationFrame(() => {
+      cursorRaf.current = null;
+      const current = editorRef.current;
+      if (current) useEditorStore.getState().setCursor(current.state.selection.from, 1);
+    });
+  };
 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3, 4, 5, 6] },
         codeBlock: { HTMLAttributes: { class: "code-block" } },
-        // 禁用可能干扰原生选区的扩展
-        dropcursor: false,
-        gapcursor: false,
+        // dropcursor 显示拖拽落点;gapcursor 让图片/代码块等节点边缘也能放置光标
+        dropcursor: { color: "var(--accent)", width: 2 },
       }),
       Link.configure({
         openOnClick: false,
@@ -65,7 +71,6 @@ export function TipTapEditor() {
       TaskItem.configure({
         nested: true,
       }),
-      SelectionFix,
     ],
     content: content ? markdownToTiptap(content) : "",
     editorProps: {
@@ -156,21 +161,24 @@ export function TipTapEditor() {
       useEditorStore.getState().setDirty(true);
       contentTimer.current = window.setTimeout(() => {
         const markdown = getMarkdownFromEditor(editor);
-        setContent(markdown);
+        useEditorStore.getState().setContent(markdown);
       }, 500);
 
-      // 更新光标位置（简化版：TipTap 没有行列概念，用字符位置）
-      const { from } = editor.state.selection;
-      setCursor(from, 1);
+      reportCursor();
     },
-    onSelectionUpdate: ({ editor }) => {
-      const { from } = editor.state.selection;
-      setCursor(from, 1);
+    onSelectionUpdate: () => {
+      reportCursor();
     },
   });
 
   editorRef.current = editor;
   (window as any).__tiptapEditor = editor;
+
+  // 卸载时清掉挂起的节流任务
+  useEffect(() => () => {
+    if (contentTimer.current !== null) window.clearTimeout(contentTimer.current);
+    if (cursorRaf.current !== null) cancelAnimationFrame(cursorRaf.current);
+  }, []);
 
   // 外部加载新文件
   useEffect(() => {

@@ -8,16 +8,18 @@ interface StatusBarProps {
 }
 
 export function StatusBar({ onOpenSettings }: StatusBarProps) {
-  const {
-    isDirty,
-    currentFileName,
-    currentFilePath,
-    cursorLine,
-    cursorColumn,
-    wordCount,
-    charCount,
-  } = useEditorStore();
-  const { enabled: aiEnabled, isGenerating, error: aiError, setEnabled } = useAiStore();
+  // 字段级订阅:避免 store 里无关字段变化时整条状态栏(带 backdrop-filter)重绘
+  const isDirty = useEditorStore((s) => s.isDirty);
+  const currentFileName = useEditorStore((s) => s.currentFileName);
+  const currentFilePath = useEditorStore((s) => s.currentFilePath);
+  const cursorLine = useEditorStore((s) => s.cursorLine);
+  const cursorColumn = useEditorStore((s) => s.cursorColumn);
+  const wordCount = useEditorStore((s) => s.wordCount);
+  const charCount = useEditorStore((s) => s.charCount);
+  const aiEnabled = useAiStore((s) => s.enabled);
+  const isGenerating = useAiStore((s) => s.isGenerating);
+  const aiError = useAiStore((s) => s.error);
+  const setEnabled = useAiStore((s) => s.setEnabled);
 
   const tr = useT();
 

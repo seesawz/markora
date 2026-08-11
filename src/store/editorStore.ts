@@ -60,7 +60,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ currentFilePath: path, currentFileName: fileName, isDirty: false });
   },
 
-  setDirty: (dirty) => set({ isDirty: dirty }),
+  setDirty: (dirty) => set((s) => (s.isDirty === dirty ? s : { isDirty: dirty })),
 
   toggleTheme: () => set((s) => ({ theme: s.theme === "light" ? "dark" : "light" })),
   setTheme: (theme) => set({ theme }),
@@ -69,7 +69,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
 
-  setCursor: (line, column) => set({ cursorLine: line, cursorColumn: column }),
+  setCursor: (line, column) =>
+    set((s) => (s.cursorLine === line && s.cursorColumn === column ? s : { cursorLine: line, cursorColumn: column })),
 
   updateStats: () => {
     const content = get().content;

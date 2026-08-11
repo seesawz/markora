@@ -621,17 +621,7 @@ export default function App() {
 
   return (
     <div className="h-full w-full flex flex-col" style={{ background: "var(--bg-primary)" }}>
-      <TabBar
-        tabs={tabs}
-        activePath={activeTabPath}
-        onSelect={selectTab}
-        onClose={(path) => closeTab(path)}
-        onRename={async (path, newName) => {
-          // TabBar 重命名:更新 workspaceStore 中的标签名
-          const ws = useWorkspaceStore.getState();
-          ws.renameTab(path, path, newName);
-        }}
-      />
+      {/* 左右结构:sidebar 占满左侧整高,右侧为 TabBar + 编辑器 */}
       <div className="flex-1 flex min-h-0">
         <FileTree
           root={root}
@@ -645,8 +635,21 @@ export default function App() {
           onRename={handleTreeRename}
           onDelete={handleTreeDelete}
         />
-        <div className="flex-1 min-w-0 relative">
-          <TipTapEditor />
+        <div className="flex-1 min-w-0 flex flex-col">
+          <TabBar
+            tabs={tabs}
+            activePath={activeTabPath}
+            onSelect={selectTab}
+            onClose={(path) => closeTab(path)}
+            onRename={async (path, newName) => {
+              // TabBar 重命名:更新 workspaceStore 中的标签名
+              const ws = useWorkspaceStore.getState();
+              ws.renameTab(path, path, newName);
+            }}
+          />
+          <div className="flex-1 min-h-0 relative">
+            <TipTapEditor />
+          </div>
         </div>
       </div>
       <StatusBar onOpenSettings={() => setSettingsOpen(true)} />

@@ -58,6 +58,7 @@
   --code-border: #e4e4e7;
 
   --selection: #18181b1a;
+  --editor-selection: rgba(23, 131, 255, 0.2);
   --line-highlight: rgba(0, 0, 0, 0.025);
 
   --shadow-sm: 0 2px 10px #0000001a;
@@ -100,6 +101,7 @@
   --code-border: #27272a;
 
   --selection: #fafafa26;
+  --editor-selection: rgba(64, 156, 255, 0.4);
   --line-highlight: rgba(255, 255, 255, 0.045);
 
   --shadow-sm: 0 2px 10px #00000066;
@@ -508,7 +510,7 @@ body {
 
 .tree-rename-input::selection,
 .tab-rename-input::selection {
-  background: var(--selection);
+  background: var(--editor-selection);
 }
 
 .outline-panel {
@@ -741,6 +743,7 @@ body {
   outline: none;
   user-select: text;
   -webkit-user-select: text;
+  caret-color: var(--accent);
 }
 
 .tiptap-editor:focus {
@@ -836,35 +839,46 @@ body {
   border-top: 1px solid var(--border-primary);
 }
 
+/* --- 选区与光标(原生渲染) --- */
+
 .tiptap-editor ::selection {
-  background: var(--selection);
+  background: var(--editor-selection);
 }
 
-/* 自定义光标修复 */
-.tiptap-cursor-fix {
-  display: inline-block;
-  width: 2px;
-  height: 1.2em;
-  background: var(--accent);
-  vertical-align: text-bottom;
-  margin: 0 -1px;
-  pointer-events: none;
-  animation: tiptap-cursor-blink 1s step-end infinite;
-}
-
-@keyframes tiptap-cursor-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
-/* 自定义选区背景 */
-.tiptap-selection-fix {
-  background: var(--selection);
-  border-radius: 2px;
+/* 选中图片等节点时,ProseMirror 会加 hideselection,此时隐藏文字选区避免双重高亮 */
+.tiptap-editor.ProseMirror-hideselection ::selection {
+  background: transparent;
 }
 
 .tiptap-editor .ProseMirror-selectednode {
   outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* gapcursor:在图片/代码块等节点边缘放置光标时的横线指示 */
+.tiptap-editor .ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+}
+
+.tiptap-editor .ProseMirror-gapcursor::after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid var(--accent);
+  animation: ProseMirror-cursor-blink 1.1s steps(2, start) infinite;
+}
+
+@keyframes ProseMirror-cursor-blink {
+  to { visibility: hidden; }
+}
+
+.tiptap-editor.ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
 }
 
 /* Placeholder */
