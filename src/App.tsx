@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useEditorStore } from "./store/editorStore";
 import { TipTapEditor } from "./components/TipTapEditor";
 import { StatusBar } from "./components/StatusBar";
@@ -6,6 +6,7 @@ import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { open, save, ask } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { writeText, readText } from "@tauri-apps/plugin-clipboard-manager";
 import { renderMarkdown, resolveLocalImages } from "./lib/markdown";
 import { t } from "./lib/i18n";
@@ -19,6 +20,8 @@ import { AiCommandModal, type AiCommandStatus } from "./components/AiCommandModa
 import { SettingsModal } from "./components/SettingsModal";
 import { FileTree } from "./components/FileTree";
 import { TabBar } from "./components/TabBar";
+import { QuickSwitcher, type QuickFile } from "./components/QuickSwitcher";
+import { PanelLeft } from "lucide-react";
 import typoraCss from "./styles/typora.css?raw";
 
 // --- 编辑器操作(基于 TipTap,通过 window.__tiptapEditor 访问) ---
@@ -160,9 +163,6 @@ function buildEditorMenuItems(): MenuItem[] {
   ];
 }
 
-// 保留 buildEditorMenuItems 供右键菜单使用
-void buildEditorMenuItems;
-
 async function handleContextAction(id: string): Promise<void> {
   switch (id) {
     case "copy": await doCopy(); break;
@@ -240,6 +240,24 @@ async function saveImpl() {
   }
 }
 
+// 另存为:总是弹出保存对话框,保存后切换到新路径
+async function saveAsImpl(): Promise<void> {
+  const { content, currentFileName } = useEditorStore.getState();
+  const selected = await save({
+    defaultPath: currentFileName,
+    filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
+  });
+  if (!selected) return;
+  try {
+    await invoke("write_file_content", { path: selected, content });
+    useEditorStore.getState().setFilePath(selected);
+    const name = selected.split(/[\\/]/).pop() || selected;
+    useWorkspaceStore.getState().openTab(selected, name);
+  } catch (e) {
+    console.error("Failed to save as:", e);
+  }
+}
+
 async function confirmDiscardIfDirty(): Promise<boolean> {
   const { isDirty, currentFileName } = useEditorStore.getState();
   if (!isDirty) return true;
@@ -276,23 +294,33 @@ function rememberCurrentSpot(): void {
   if (editor && currentFilePath) {
     rememberSpot(currentFilePath, {
       pos: editor.state.selection.from,
-      scrollTop: 0, // TipTap 没有 scrollDOM,暂时用 0
+      scrollTop: editor.view?.dom?.scrollTop ?? 0,
     });
   }
 }
 
 export default function App() {
   const theme = useEditorStore((s) => s.theme);
+  const focusMode = useEditorStore((s) => s.focusMode);
   const root = useWorkspaceStore((s) => s.root);
   const tree = useWorkspaceStore((s) => s.tree);
   const tabs = useWorkspaceStore((s) => s.tabs);
   const activeTabPath = useWorkspaceStore((s) => s.activeTabPath);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // 侧栏展开状态,跨会话记住
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try { return localStorage.getItem("markora:sidebar") !== "0"; } catch { return true; }
+  });
+  const [quickOpen, setQuickOpen] = useState(false);
   const [aiCommandOpen, setAiCommandOpen] = useState(false);
   const [aiStatus, setAiStatus] = useState<AiCommandStatus>("idle");
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiAnchor, setAiAnchor] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    try { localStorage.setItem("markora:sidebar", sidebarOpen ? "1" : "0"); } catch {}
+  }, [sidebarOpen]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -450,10 +478,12 @@ export default function App() {
     } catch {}
   };
 
-  const newFileInWorkspace = async () => {
+  // dir 指定时在该目录下新建(文件树右键),否则用工作区根目录
+  const newFileInWorkspace = async (dir?: string) => {
     await flushCurrentFile();
     const rootPath = useWorkspaceStore.getState().root;
-    const defaultPath = rootPath ? `${rootPath}/untitled.md` : "untitled.md";
+    const baseDir = dir ?? rootPath;
+    const defaultPath = baseDir ? `${baseDir}/untitled.md` : "untitled.md";
     const selected = await save({
       defaultPath,
       filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
@@ -470,11 +500,29 @@ export default function App() {
     }
   };
 
+  // 文件树右键:在指定目录下新建文件夹
+  const newFolderInWorkspace = async (dir: string) => {
+    const name = (window.prompt("新建文件夹名称:") ?? "").trim();
+    if (!name || /[\\/]/.test(name)) return;
+    const sep = dir.includes("\\") ? "\\" : "/";
+    try {
+      await invoke("create_folder", { path: `${dir}${sep}${name}` });
+      await refreshWorkspaceTree();
+    } catch (e) {
+      console.error("Failed to create folder:", e);
+    }
+  };
+
   const openAiCommand = () => {
     const editor = getEditor();
     if (editor) {
-      // TipTap 没有 coordsAtPos,用简单定位
-      setAiAnchor({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+      // 弹窗锚定在光标处(coordsAtPos 返回视口坐标)
+      try {
+        const rect = editor.view.coordsAtPos(editor.state.selection.head);
+        setAiAnchor({ x: rect.left, y: rect.bottom + 8 });
+      } catch {
+        setAiAnchor({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+      }
     } else {
       setAiAnchor(null);
     }
@@ -562,6 +610,19 @@ export default function App() {
     } catch {}
   }, []);
 
+  // 窗口标题跟随当前文件与修改状态(原生 app 习惯)
+  useEffect(() => {
+    let last = "";
+    const apply = (s: { currentFileName: string; isDirty: boolean }) => {
+      const title = `${s.isDirty ? "• " : ""}${s.currentFileName} — Markora`;
+      if (title === last) return;
+      last = title;
+      getCurrentWindow().setTitle(title).catch(() => {});
+    };
+    apply(useEditorStore.getState());
+    return useEditorStore.subscribe(apply);
+  }, []);
+
   // Build native menu
   useEffect(() => {
     rebuildMenu().catch(console.error);
@@ -576,9 +637,19 @@ export default function App() {
         case "open_file": openFileDialog(); break;
         case "open_folder": openFolder(); break;
         case "save": saveImpl(); break;
+        case "save_as": saveAsImpl(); break;
+        case "close_tab": {
+          const active = useWorkspaceStore.getState().activeTabPath;
+          if (active) closeTab(active);
+          break;
+        }
         case "export_html": exportHtml(); break;
         case "ai_command": openAiCommand(); break;
-        case "settings": setSettingsOpen(true); break;
+        case "toggle_sidebar": setSidebarOpen((v) => !v); break;
+        case "toggle_theme": useEditorStore.getState().toggleTheme(); break;
+        case "toggle_focus": useEditorStore.getState().toggleFocusMode(); break;
+        case "settings":
+        case "open_settings": setSettingsOpen(true); break;
         case "bold": doBold(); break;
         case "italic": doItalic(); break;
         case "link": doLink(); break;
@@ -619,40 +690,105 @@ export default function App() {
     return () => document.removeEventListener("focusin", handler);
   }, []);
 
+  // ⌘P 快速切换器
+  const quickFiles = useMemo<QuickFile[]>(() => {
+    if (!root || !tree) return [];
+    const sep = root.includes("\\") ? "\\" : "/";
+    const prefix = root.endsWith(sep) ? root : root + sep;
+    const acc: QuickFile[] = [];
+    const walk = (nodes: WorkspaceFile[]) => {
+      for (const node of nodes) {
+        if (node.isDir) walk(node.children);
+        else acc.push({ path: node.path, name: node.name, rel: node.path.startsWith(prefix) ? node.path.slice(prefix.length) : node.path });
+      }
+    };
+    walk(tree);
+    return acc;
+  }, [root, tree]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        setQuickOpen((v) => !v);
+        return;
+      }
+      // ⌃Tab / ⌃⇧Tab 在标签间循环
+      if (e.ctrlKey && !e.metaKey && !e.altKey && e.key === "Tab") {
+        e.preventDefault();
+        const ws = useWorkspaceStore.getState();
+        if (ws.tabs.length < 2 || !ws.activeTabPath) return;
+        const idx = ws.tabs.findIndex((tab) => tab.path === ws.activeTabPath);
+        const nextIdx = e.shiftKey
+          ? (idx - 1 + ws.tabs.length) % ws.tabs.length
+          : (idx + 1) % ws.tabs.length;
+        selectTab(ws.tabs[nextIdx].path);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   return (
     <div className="h-full w-full flex flex-col" style={{ background: "var(--bg-primary)" }}>
-      {/* 左右结构:sidebar 占满左侧整高,右侧为 TabBar + 编辑器 */}
+      {/* 左右结构:sidebar 占满左侧整高,右侧为 TabBar + 编辑器;专注模式只留编辑器 */}
       <div className="flex-1 flex min-h-0">
-        <FileTree
+        {!focusMode && (
+          <FileTree
+          open={sidebarOpen}
+          onToggle={() => setSidebarOpen(false)}
           root={root}
           tree={tree}
           activePath={useEditorStore.getState().currentFilePath}
           onOpenFile={openFileInWorkspace}
           onOpenFileDialog={openFileDialog}
           onOpenFolder={openFolder}
-          onNewFile={newFileInWorkspace}
+          onNewFile={() => newFileInWorkspace()}
+          onNewFileAt={(dir) => newFileInWorkspace(dir)}
+          onNewFolderAt={newFolderInWorkspace}
           onRefresh={refreshWorkspaceTree}
           onRename={handleTreeRename}
           onDelete={handleTreeDelete}
-        />
+          />
+        )}
         <div className="flex-1 min-w-0 flex flex-col">
-          <TabBar
+          {!focusMode && (
+            <div className="flex items-start">
+              {!sidebarOpen && (
+                <button
+                  type="button"
+                  className="sidebar-expand-btn"
+                  onClick={() => setSidebarOpen(true)}
+                  title="展开侧栏 (⌘\)"
+                  aria-label="展开侧栏"
+                >
+                  <PanelLeft className="h-[15px] w-[15px]" />
+                </button>
+              )}
+              <div className="flex-1 min-w-0">
+                <TabBar
             tabs={tabs}
             activePath={activeTabPath}
             onSelect={selectTab}
             onClose={(path) => closeTab(path)}
-            onRename={async (path, newName) => {
-              // TabBar 重命名:更新 workspaceStore 中的标签名
-              const ws = useWorkspaceStore.getState();
-              ws.renameTab(path, path, newName);
+            onRename={handleTreeRename}
+            onReorder={(from, to) => useWorkspaceStore.getState().moveTab(from, to)}
+                />
+              </div>
+            </div>
+          )}
+          <div
+            className="flex-1 min-h-0 relative"
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setContextMenu({ x: e.clientX, y: e.clientY, items: buildEditorMenuItems() });
             }}
-          />
-          <div className="flex-1 min-h-0 relative">
+          >
             <TipTapEditor />
           </div>
         </div>
       </div>
-      <StatusBar onOpenSettings={() => setSettingsOpen(true)} />
+      {!focusMode && <StatusBar onOpenSettings={() => setSettingsOpen(true)} />}
 
       {contextMenu && (
         <ContextMenu
@@ -668,6 +804,20 @@ export default function App() {
       )}
 
       {settingsOpen && <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
+
+      {quickOpen && (
+        <QuickSwitcher
+          files={quickFiles}
+          onSelect={(path) => {
+            setQuickOpen(false);
+            openFileInWorkspace(path);
+          }}
+          onClose={() => {
+            setQuickOpen(false);
+            getEditor()?.commands.focus();
+          }}
+        />
+      )}
 
       {aiCommandOpen && (
         <AiCommandModal

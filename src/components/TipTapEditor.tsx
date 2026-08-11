@@ -10,6 +10,8 @@ import TaskItem from "@tiptap/extension-task-item";
 import { useEditorStore } from "../store/editorStore";
 import { useAiStore } from "../store/aiStore";
 import { markdownToTiptap, tiptapToMarkdown } from "../lib/markdownSerializer";
+import { recallSpot } from "../lib/cursorMemory";
+import { t } from "../lib/i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir } from "@tauri-apps/api/path";
 import { SearchPanel } from "./SearchPanel";
@@ -64,7 +66,8 @@ export function TipTapEditor() {
         HTMLAttributes: { class: "editor-image" },
       }),
       Placeholder.configure({
-        placeholder: "开始输入...",
+        // 函数形式:每次渲染取值,切换语言即时生效
+        placeholder: () => t("editorPlaceholder"),
       }),
       Typography,
       TaskList,
@@ -188,7 +191,19 @@ export function TipTapEditor() {
 
     const tiptapContent = markdownToTiptap(content);
     editor.commands.setContent(tiptapContent);
-    // TipTap 没有 clearHistory,用 setContent 重置即可
+
+    // 恢复该文件上次的光标与滚动位置(会话级记忆,Obsidian 式)
+    const path = useEditorStore.getState().currentFilePath;
+    const spot = path ? recallSpot(path) : null;
+    if (spot) {
+      const maxPos = editor.state.doc.content.size;
+      editor.commands.setTextSelection(Math.min(spot.pos, maxPos));
+      requestAnimationFrame(() => {
+        if (editorRef.current) editorRef.current.view.dom.scrollTop = spot.scrollTop;
+      });
+    } else {
+      editor.view.dom.scrollTop = 0;
+    }
   }, [content, editor, isDirty]);
 
   // 主题切换

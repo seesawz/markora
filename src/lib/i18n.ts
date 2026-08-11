@@ -8,6 +8,7 @@ const dict = {
     words: "词",
     chars: "字符",
     untitled: "未命名.md",
+    editorPlaceholder: "开始输入...",
     // Context menu
     cut: "剪切",
     copy: "复制",
@@ -66,6 +67,7 @@ const dict = {
     words: "words",
     chars: "chars",
     untitled: "Untitled.md",
+    editorPlaceholder: "Start typing...",
     cut: "Cut",
     copy: "Copy",
     paste: "Paste",

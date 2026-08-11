@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronRight, FileInput, FilePlus, FileText, Folder, FolderOpen, ListTree, RefreshCw } from "lucide-react";
+import { ChevronRight, FileInput, FilePlus, FileText, Folder, FolderOpen, ListTree, PanelLeftClose, RefreshCw } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { splitFileName } from "../lib/utils";
 import type { WorkspaceFile } from "../store/workspaceStore";
@@ -14,10 +14,15 @@ interface FileTreeProps {
   root: string | null;
   tree: WorkspaceFile[] | null;
   activePath: string | null;
+  /** Obsidian 式折叠:false 时宽度动画收起到 0 */
+  open?: boolean;
+  onToggle?: () => void;
   onOpenFile: (path: string) => void;
   onOpenFileDialog: () => void;
   onOpenFolder: () => void;
   onNewFile: () => void;
+  onNewFileAt?: (dir: string) => void;
+  onNewFolderAt?: (dir: string) => void;
   onRefresh: () => void;
   onRename: (path: string, newName: string) => void;
   onDelete: (path: string, isDir: boolean) => void;
@@ -168,13 +173,15 @@ function TreeItem({ node, depth, activePath, expanded, renamingPath, onToggle, o
   );
 }
 
-export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog, onOpenFolder, onNewFile, onRefresh, onRename, onDelete }: FileTreeProps) {
+export function FileTree({ root, tree, activePath, open = true, onToggle, onOpenFile, onOpenFileDialog, onOpenFolder, onNewFile, onNewFileAt, onNewFolderAt, onRefresh, onRename, onDelete }: FileTreeProps) {
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [width, setWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [resizing, setResizing] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [menu, setMenu] = useState<TreeMenu | null>(null);
+  // 工作区模式下侧栏分页:文件树 / 当前文档大纲
+  const [view, setView] = useState<"files" | "outline">("files");
 
   useEffect(() => {
     if (!resizing) return;
@@ -216,6 +223,13 @@ export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog,
 
   const menuItems: MenuItem[] = menu
     ? [
+        ...(menu.isDir
+          ? ([
+              { id: "new_file_here", label: "新建文件" },
+              { id: "new_folder_here", label: "新建文件夹" },
+              { id: "sep0", separator: true },
+            ] as MenuItem[])
+          : []),
         { id: "rename", label: "重命名" },
         { id: "delete", label: menu.isDir ? "删除文件夹" : "删除文件" },
         { id: "sep1", separator: true },
@@ -225,13 +239,24 @@ export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog,
 
   const handleMenuClick = (id: string) => {
     if (!menu) return;
+    if (id === "new_file_here") onNewFileAt?.(menu.path);
+    if (id === "new_folder_here") onNewFolderAt?.(menu.path);
     if (id === "rename") setRenamingPath(menu.path);
     if (id === "delete") onDelete(menu.path, menu.isDir);
     if (id === "reveal") revealItemInDir(menu.path).catch((e) => console.error("reveal failed:", e));
   };
 
   return (
-    <aside className="sidebar" aria-label="文件树" style={{ width }}>
+    <aside
+      className="sidebar"
+      aria-label="文件树"
+      aria-hidden={!open}
+      data-collapsed={!open || undefined}
+      data-resizing={resizing || undefined}
+      style={{ width: open ? width : 0 }}
+    >
+      {/* 内层固定宽度:收起动画时内容整体滑出而不是被挤压变形 */}
+      <div className="sidebar-inner" style={{ width }}>
       <div className="flex items-center gap-1 px-3 py-2">
         {root ? (
           <Folder className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
@@ -283,6 +308,18 @@ export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog,
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
         )}
+        {onToggle && (
+          <button
+            type="button"
+            className="sidebar-icon-btn"
+            onClick={onToggle}
+            onMouseEnter={(e) => showTooltip(e, "收起侧栏")}
+            onMouseLeave={() => setTooltip(null)}
+            aria-label="收起侧栏"
+          >
+            <PanelLeftClose className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       {tooltip && (
@@ -291,9 +328,35 @@ export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog,
         </div>
       )}
 
+      {root && (
+        <div className="sidebar-seg" role="tablist" aria-label="侧栏视图">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === "files"}
+            className={`sidebar-seg-btn ${view === "files" ? "sidebar-seg-active" : ""}`}
+            onClick={() => setView("files")}
+          >
+            文件
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === "outline"}
+            className={`sidebar-seg-btn ${view === "outline" ? "sidebar-seg-active" : ""}`}
+            onClick={() => setView("outline")}
+          >
+            大纲
+          </button>
+        </div>
+      )}
+
       {!root ? (
         // 单文件模式：展示当前文档的标题目录
         <OutlinePanel onOpenFileDialog={onOpenFileDialog} onOpenFolder={onOpenFolder} />
+      ) : view === "outline" ? (
+        // 工作区模式的大纲分页
+        <OutlinePanel compact onOpenFileDialog={onOpenFileDialog} onOpenFolder={onOpenFolder} />
       ) : !tree || tree.length === 0 ? (
         <div className="flex flex-col items-center gap-2 px-4 py-6 text-center">
           <p className="text-[12px] leading-relaxed text-[var(--text-tertiary)]">
@@ -337,9 +400,11 @@ export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog,
           onClose={() => setMenu(null)}
         />
       )}
+      </div>
 
-      <div
-        className="sidebar-resize-handle"
+      {open && (
+        <div
+          className="sidebar-resize-handle"
         data-resizing={resizing || undefined}
         role="separator"
         aria-label="调整侧边栏宽度"
@@ -362,7 +427,8 @@ export function FileTree({ root, tree, activePath, onOpenFile, onOpenFileDialog,
             adjustWidth(8);
           }
         }}
-      />
+        />
+      )}
     </aside>
   );
 }

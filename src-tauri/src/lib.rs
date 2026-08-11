@@ -24,6 +24,11 @@ fn create_new_file(path: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn create_folder(path: &str) -> Result<(), String> {
+    fs::create_dir_all(path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn rename_path(from: &str, to: &str) -> Result<(), String> {
     fs::rename(from, to).map_err(|e| e.to_string())
 }
@@ -572,6 +577,7 @@ pub fn run() {
             read_file_content,
             write_file_content,
             create_new_file,
+            create_folder,
             rename_path,
             trash_path,
             scan_workspace,

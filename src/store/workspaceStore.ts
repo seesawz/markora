@@ -28,6 +28,8 @@ interface WorkspaceState {
   /** 关闭标签，返回新的激活路径（null 表示没有剩余标签） */
   closeTab: (path: string) => string | null;
   setActiveTab: (path: string | null) => void;
+  /** 拖拽排序:把 fromPath 标签移动到 toPath 标签的位置 */
+  moveTab: (fromPath: string, toPath: string) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -77,4 +79,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   setActiveTab: (path) => set({ activeTabPath: path }),
+
+  moveTab: (fromPath, toPath) => {
+    const { tabs } = get();
+    const fromIdx = tabs.findIndex((tab) => tab.path === fromPath);
+    const toIdx = tabs.findIndex((tab) => tab.path === toPath);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+    const next = [...tabs];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    set({ tabs: next });
+  },
 }));

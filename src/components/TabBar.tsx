@@ -9,12 +9,15 @@ interface TabBarProps {
   onSelect: (path: string) => void;
   onClose: (path: string) => void;
   onRename: (path: string, newName: string) => void;
+  onReorder?: (fromPath: string, toPath: string) => void;
 }
 
-export function TabBar({ tabs, activePath, onSelect, onClose, onRename }: TabBarProps) {
+export function TabBar({ tabs, activePath, onSelect, onClose, onRename, onReorder }: TabBarProps) {
   const barRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
+  // 拖拽中的标签路径;拖过其他标签时实时换位(浏览器标签的交互习惯)
+  const draggingPath = useRef<string | null>(null);
 
   // 标签多到溢出时,激活的标签(点击/关闭相邻/Cmd+W 后)始终滚进视野
   useEffect(() => {
@@ -54,6 +57,19 @@ export function TabBar({ tabs, activePath, onSelect, onClose, onRename }: TabBar
             role="tab"
             aria-selected={active}
             className={`tab-item ${active ? "tab-item-active" : ""}`}
+            draggable={!renaming}
+            onDragStart={(event) => {
+              draggingPath.current = tab.path;
+              event.dataTransfer.effectAllowed = "move";
+            }}
+            onDragOver={(event) => {
+              if (!draggingPath.current || draggingPath.current === tab.path) return;
+              event.preventDefault();
+              onReorder?.(draggingPath.current, tab.path);
+            }}
+            onDragEnd={() => {
+              draggingPath.current = null;
+            }}
             onClick={() => onSelect(tab.path)}
             onAuxClick={(event) => {
               // 中键点击关闭(Obsidian/浏览器习惯)

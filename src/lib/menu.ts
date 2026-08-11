@@ -46,6 +46,7 @@ export async function rebuildMenu() {
   const viewMenu = await Submenu.new({
     text: L("视图", "View"),
     items: [
+      await MenuItem.new({ id: "toggle_sidebar", text: L("切换侧栏", "Toggle Sidebar"), accelerator: "CmdOrCtrl+\\", action: emit("toggle_sidebar") }),
       await MenuItem.new({ id: "toggle_theme", text: L("切换主题", "Toggle Theme"), accelerator: "CmdOrCtrl+Shift+T", action: emit("toggle_theme") }),
       await MenuItem.new({ id: "toggle_focus", text: L("专注模式", "Focus Mode"), accelerator: "CmdOrCtrl+Shift+F", action: emit("toggle_focus") }),
     ],

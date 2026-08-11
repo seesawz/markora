@@ -9,6 +9,32 @@ interface Props {
   initialShowReplace?: boolean;
 }
 
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// 遍历文本块计算匹配的真实 ProseMirror 位置。
+// 文本块内 inline 偏移与文本下标一致:非文本 inline 节点(图片/硬换行)按 nodeSize 用占位符补齐,
+// 既保持对齐又阻断跨节点误匹配;加粗等 mark 边界的相邻文本节点位置连续,跨边界匹配仍然正确。
+function findMatches(editor: Editor, query: string): { from: number; to: number }[] {
+  const results: { from: number; to: number }[] = [];
+  if (!query) return results;
+  const regex = new RegExp(escapeRegExp(query), "gi");
+  editor.state.doc.descendants((node, pos) => {
+    if (!node.isTextblock) return true;
+    let text = "";
+    node.content.forEach((child) => {
+      text += child.isText && child.text ? child.text : "\u0000".repeat(child.nodeSize);
+    });
+    regex.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(text)) !== null) {
+      if (m[0].length === 0) break;
+      results.push({ from: pos + 1 + m.index, to: pos + 1 + m.index + m[0].length });
+    }
+    return false;
+  });
+  return results;
+}
+
 export function SearchPanel({ editor, onClose, initialQuery = "", initialShowReplace = false }: Props) {
   const tr = useT();
   const [query, setQuery] = useState(initialQuery);
@@ -27,15 +53,7 @@ export function SearchPanel({ editor, onClose, initialQuery = "", initialShowRep
   const applyQuery = useCallback(
     (q: string) => {
       if (!editor) return;
-      if (!q) {
-        setMatchCount(0);
-        return;
-      }
-      // 简单计数：遍历文档文本
-      const text = editor.getText();
-      const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-      const matches = text.match(regex);
-      setMatchCount(matches?.length ?? 0);
+      setMatchCount(q ? findMatches(editor, q).length : 0);
     },
     [editor]
   );
@@ -45,47 +63,20 @@ export function SearchPanel({ editor, onClose, initialQuery = "", initialShowRep
 
   const findNext = () => {
     if (!editor || !query) return;
-    const { from } = editor.state.selection;
-    const text = editor.getText();
-    const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-    regex.lastIndex = from;
-    const match = regex.exec(text);
-    if (match) {
-      editor.chain().focus().setTextSelection({ from: match.index, to: match.index + match[0].length }).run();
-    } else {
-      // 循环到开头
-      regex.lastIndex = 0;
-      const firstMatch = regex.exec(text);
-      if (firstMatch) {
-        editor.chain().focus().setTextSelection({ from: firstMatch.index, to: firstMatch.index + firstMatch[0].length }).run();
-      }
-    }
+    const matches = findMatches(editor, query);
+    if (!matches.length) return;
+    const { to } = editor.state.selection;
+    const next = matches.find((m) => m.from >= to) ?? matches[0];
+    editor.chain().focus().setTextSelection(next).run();
   };
 
   const findPrevious = () => {
     if (!editor || !query) return;
+    const matches = findMatches(editor, query);
+    if (!matches.length) return;
     const { from } = editor.state.selection;
-    const text = editor.getText();
-    const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-    let lastMatch: RegExpExecArray | null = null;
-    let match: RegExpExecArray | null;
-    while ((match = regex.exec(text)) !== null) {
-      if (match.index >= from) break;
-      lastMatch = match;
-    }
-    if (lastMatch) {
-      editor.chain().focus().setTextSelection({ from: lastMatch.index, to: lastMatch.index + lastMatch[0].length }).run();
-    } else {
-      // 循环到末尾
-      regex.lastIndex = 0;
-      let last: RegExpExecArray | null = null;
-      while ((match = regex.exec(text)) !== null) {
-        last = match;
-      }
-      if (last) {
-        editor.chain().focus().setTextSelection({ from: last.index, to: last.index + last[0].length }).run();
-      }
-    }
+    const prev = [...matches].reverse().find((m) => m.to <= from) ?? matches[matches.length - 1];
+    editor.chain().focus().setTextSelection(prev).run();
   };
 
   const replaceNext = () => {
@@ -93,20 +84,26 @@ export function SearchPanel({ editor, onClose, initialQuery = "", initialShowRep
     const { from, to } = editor.state.selection;
     const selectedText = editor.state.doc.textBetween(from, to);
     if (selectedText.toLowerCase() === query.toLowerCase()) {
-      editor.chain().focus().insertContent(replace).run();
-      findNext();
-    } else {
-      findNext();
+      if (replace) {
+        editor.chain().focus().insertContentAt({ from, to }, replace).run();
+      } else {
+        editor.chain().focus().deleteRange({ from, to }).run();
+      }
+      applyQuery(query);
     }
+    findNext();
   };
 
   const replaceAll = () => {
     if (!editor || !query) return;
-    const text = editor.getText();
-    const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-    const newText = text.replace(regex, replace);
-    // 注意：这会丢失格式，仅用于纯文本场景
-    editor.commands.setContent(newText);
+    const matches = findMatches(editor, query);
+    if (!matches.length) return;
+    // 从后往前替换,前面的位置不会因替换而失效;逐个替换保留周围格式
+    let chain = editor.chain().focus();
+    for (const m of [...matches].reverse()) {
+      chain = replace ? chain.insertContentAt({ from: m.from, to: m.to }, replace) : chain.deleteRange(m);
+    }
+    chain.run();
     setMatchCount(0);
   };
 
