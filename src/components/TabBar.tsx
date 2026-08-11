@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { splitFileName } from "../lib/utils";
+import { handleWindowDragMouseDown } from "../lib/windowDrag";
 import type { WorkspaceTab } from "../store/workspaceStore";
 
 interface TabBarProps {
@@ -10,9 +11,10 @@ interface TabBarProps {
   onClose: (path: string) => void;
   onRename: (path: string, newName: string) => void;
   onReorder?: (fromPath: string, toPath: string) => void;
+  onNewTab?: () => void;
 }
 
-export function TabBar({ tabs, activePath, onSelect, onClose, onRename, onReorder }: TabBarProps) {
+export function TabBar({ tabs, activePath, onSelect, onClose, onRename, onReorder, onNewTab }: TabBarProps) {
   const barRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
@@ -35,8 +37,7 @@ export function TabBar({ tabs, activePath, onSelect, onClose, onRename, onReorde
     inputRef.current.select();
   }, [renamingPath]);
 
-  if (tabs.length === 0) return null;
-
+  // Obsidian 式标题栏:没有标签时也渲染,整条作为窗口拖拽区
   const commitRename = (tab: WorkspaceTab, base: string, ext: string) => {
     const value = (inputRef.current?.value ?? "").trim();
     setRenamingPath(null);
@@ -45,7 +46,14 @@ export function TabBar({ tabs, activePath, onSelect, onClose, onRename, onReorde
   };
 
   return (
-    <div className="tab-bar" role="tablist" aria-label="打开的文档" ref={barRef}>
+    <div
+      className="tab-bar"
+      role="tablist"
+      aria-label="打开的文档"
+      ref={barRef}
+      data-window-drag-region
+      onMouseDown={handleWindowDragMouseDown}
+    >
       {tabs.map((tab) => {
         const active = tab.path === activePath;
         const renaming = renamingPath === tab.path;
@@ -122,11 +130,22 @@ export function TabBar({ tabs, activePath, onSelect, onClose, onRename, onReorde
                 onClose(tab.path);
               }}
             >
-              <X className="h-3 w-3" />
+              <X size={16} strokeWidth={2} />
             </button>
           </div>
         );
       })}
+      {onNewTab && (
+        <button
+          type="button"
+          className="tab-new"
+          onClick={onNewTab}
+          title="新建文件"
+          aria-label="新建文件"
+        >
+          <Plus size={20} strokeWidth={2} />
+        </button>
+      )}
     </div>
   );
 }

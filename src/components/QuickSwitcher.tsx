@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileText } from "lucide-react";
+import { FileText } from "@phosphor-icons/react";
 import { splitFileName } from "../lib/utils";
 
 export interface QuickFile {
@@ -100,7 +100,7 @@ export function QuickSwitcher({ files, onSelect, onClose }: QuickSwitcherProps) 
                 onMouseEnter={() => setIndex(i)}
                 onClick={() => onSelect(file.path)}
               >
-                <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
+                <FileText size={14} className="shrink-0 text-[var(--text-tertiary)]" />
                 <span className="truncate">{splitFileName(file.name).base}</span>
                 <span className="quick-switcher-rel truncate">{file.rel}</span>
               </button>

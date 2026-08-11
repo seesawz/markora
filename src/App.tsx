@@ -16,13 +16,17 @@ import { getSelectedDomText, getSelectedText, getTextInputPasteTarget, insertTex
 import { useAiStore } from "./store/aiStore";
 import { useWorkspaceStore, type WorkspaceFile } from "./store/workspaceStore";
 import { forgetSpot, rememberSpot } from "./lib/cursorMemory";
+import { handleWindowDragMouseDown } from "./lib/windowDrag";
 import { AiCommandModal, type AiCommandStatus } from "./components/AiCommandModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { FileTree } from "./components/FileTree";
 import { TabBar } from "./components/TabBar";
 import { QuickSwitcher, type QuickFile } from "./components/QuickSwitcher";
-import { PanelLeft } from "lucide-react";
+import { PanelLeftOpen } from "lucide-react";
 import typoraCss from "./styles/typora.css?raw";
+
+// macOS Overlay 标题栏:红绿灯悬浮在内容左上角,顶部一行需要避让
+const IS_MAC = navigator.userAgent.includes("Mac");
 
 // --- 编辑器操作(基于 TipTap,通过 window.__tiptapEditor 访问) ---
 
@@ -753,7 +757,12 @@ export default function App() {
         )}
         <div className="flex-1 min-w-0 flex flex-col">
           {!focusMode && (
-            <div className="flex items-start">
+            <div
+              className="flex items-center"
+              data-window-drag-region
+              onMouseDown={handleWindowDragMouseDown}
+              style={{ height: 40, paddingLeft: IS_MAC && !sidebarOpen ? 72 : 0 }}
+            >
               {!sidebarOpen && (
                 <button
                   type="button"
@@ -762,7 +771,7 @@ export default function App() {
                   title="展开侧栏 (⌘\)"
                   aria-label="展开侧栏"
                 >
-                  <PanelLeft className="h-[15px] w-[15px]" />
+                  <PanelLeftOpen size={20} strokeWidth={2} />
                 </button>
               )}
               <div className="flex-1 min-w-0">
@@ -773,6 +782,7 @@ export default function App() {
             onClose={(path) => closeTab(path)}
             onRename={handleTreeRename}
             onReorder={(from, to) => useWorkspaceStore.getState().moveTab(from, to)}
+            onNewTab={() => newFileInWorkspace()}
                 />
               </div>
             </div>

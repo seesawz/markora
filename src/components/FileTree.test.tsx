@@ -6,6 +6,12 @@ import { FileTree } from "./FileTree";
 import { useEditorStore } from "../store/editorStore";
 import type { WorkspaceFile } from "../store/workspaceStore";
 
+const { startDragging } = vi.hoisted(() => ({ startDragging: vi.fn(() => Promise.resolve()) }));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({ startDragging }),
+}));
+
 const tree: WorkspaceFile[] = [
   {
     name: "docs",
@@ -20,7 +26,10 @@ const tree: WorkspaceFile[] = [
 ];
 
 describe("FileTree", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    startDragging.mockClear();
+  });
 
   const baseProps = {
     root: "/ws",
@@ -61,6 +70,19 @@ describe("FileTree", () => {
 
     fireEvent.mouseLeave(screen.getByLabelText("新建文件"));
     expect(screen.queryByText("新建文件")).toBeNull();
+  });
+
+  it("starts native dragging from the header but not its toolbar buttons", () => {
+    const { container } = render(<FileTree {...baseProps} />);
+    const header = container.querySelector('[data-window-drag-region]') as HTMLElement;
+
+    fireEvent.mouseDown(header, { button: 0 });
+    expect(startDragging).toHaveBeenCalledOnce();
+
+    startDragging.mockClear();
+    fireEvent.mouseDown(screen.getByLabelText("新建文件"), { button: 0 });
+    fireEvent.mouseDown(screen.getByLabelText("打开文件"), { button: 0 });
+    expect(startDragging).not.toHaveBeenCalled();
   });
 
   it("calls onOpenFileDialog from the open-file button", () => {

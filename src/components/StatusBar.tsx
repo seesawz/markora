@@ -1,7 +1,7 @@
 import { useEditorStore } from "../store/editorStore";
 import { useAiStore } from "../store/aiStore";
 import { useT } from "../lib/i18n";
-import { Sparkles, Settings, Loader2, AlertCircle } from "lucide-react";
+import { CircleNotch, GearSix, Sparkle, WarningCircle } from "@phosphor-icons/react";
 
 interface StatusBarProps {
   onOpenSettings: () => void;
@@ -70,9 +70,9 @@ export function StatusBar({ onOpenSettings }: StatusBarProps) {
           aria-label={aiTitle}
         >
           {isGenerating ? (
-            <Loader2 className="h-[13px] w-[13px] animate-spin" />
+            <CircleNotch size={13} className="animate-spin" />
           ) : (
-            <Sparkles className="h-[13px] w-[13px]" />
+            <Sparkle size={13} />
           )}
         </button>
         <button
@@ -82,7 +82,7 @@ export function StatusBar({ onOpenSettings }: StatusBarProps) {
           title="设置"
           aria-label="设置"
         >
-          <Settings className="h-[13px] w-[13px]" />
+          <GearSix size={13} />
         </button>
         {aiError && (
           <span
@@ -90,7 +90,7 @@ export function StatusBar({ onOpenSettings }: StatusBarProps) {
             style={{ color: "#d14343" }}
             title={aiError}
           >
-            <AlertCircle className="h-[13px] w-[13px]" />
+            <WarningCircle size={13} />
           </span>
         )}
         <span style={{ marginLeft: 4 }}>Ln {cursorLine}, Col {cursorColumn}</span>

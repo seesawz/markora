@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronRight, FileInput, FilePlus, FileText, Folder, FolderOpen, ListTree, PanelLeftClose, RefreshCw } from "lucide-react";
+import { CaretRight, FileText, Folder, FolderOpen, ListBullets } from "@phosphor-icons/react";
+import { FileSearch2, FolderOpen as FolderOpenIcon, PanelLeftClose, RefreshCcw, SquarePen } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { splitFileName } from "../lib/utils";
+import { handleWindowDragMouseDown } from "../lib/windowDrag";
 import type { WorkspaceFile } from "../store/workspaceStore";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { OutlinePanel } from "./OutlinePanel";
 
-const DEFAULT_SIDEBAR_WIDTH = 220;
+const DEFAULT_SIDEBAR_WIDTH = 260;
 const MIN_SIDEBAR_WIDTH = 180;
 const MAX_SIDEBAR_WIDTH = 420;
 
@@ -95,14 +97,15 @@ function TreeItem({ node, depth, activePath, expanded, renamingPath, onToggle, o
           }}
           title={node.path}
         >
-          <ChevronRight
-            className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)] transition-transform"
+          <CaretRight
+            size={14}
+            className="shrink-0 text-[var(--text-tertiary)] transition-transform"
             style={{ transform: expandedValue ? "rotate(90deg)" : undefined }}
           />
           {expandedValue ? (
-            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
+            <FolderOpen size={14} className="shrink-0 text-[var(--text-tertiary)]" />
           ) : (
-            <Folder className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
+            <Folder size={14} className="shrink-0 text-[var(--text-tertiary)]" />
           )}
           {renaming ? (
             <input
@@ -153,7 +156,7 @@ function TreeItem({ node, depth, activePath, expanded, renamingPath, onToggle, o
       }}
       title={node.path}
     >
-      <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
+      <FileText size={14} className="shrink-0 text-[var(--text-tertiary)]" />
       {renaming ? (
         <input
           ref={inputRef}
@@ -257,15 +260,10 @@ export function FileTree({ root, tree, activePath, open = true, onToggle, onOpen
     >
       {/* 内层固定宽度:收起动画时内容整体滑出而不是被挤压变形 */}
       <div className="sidebar-inner" style={{ width }}>
-      <div className="flex items-center gap-1 px-3 py-2">
-        {root ? (
-          <Folder className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
-        ) : (
-          <ListTree className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
-        )}
-        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--text-primary)]">
-          {root ? rootName(root) : "大纲"}
-        </span>
+      {/* 顶部标题条:图标行 + 工作区名行合成一个大的窗口拖拽区,任意空白/文字都能拖动窗口 */}
+      <div data-window-drag-region className="flex flex-col" onMouseDown={handleWindowDragMouseDown}>
+      {/* 第一行:图标组靠右,左侧空白留给窗口拖动 */}
+      <div className="flex items-center justify-end gap-1 px-2" style={{ minHeight: 40 }}>
         <button
           type="button"
           className="sidebar-icon-btn"
@@ -274,7 +272,7 @@ export function FileTree({ root, tree, activePath, open = true, onToggle, onOpen
           onMouseLeave={() => setTooltip(null)}
           aria-label="新建文件"
         >
-          <FilePlus className="h-3.5 w-3.5" />
+          <SquarePen size={20} strokeWidth={2} />
         </button>
         <button
           type="button"
@@ -284,7 +282,7 @@ export function FileTree({ root, tree, activePath, open = true, onToggle, onOpen
           onMouseLeave={() => setTooltip(null)}
           aria-label="打开文件"
         >
-          <FileInput className="h-3.5 w-3.5" />
+          <FileSearch2 size={20} strokeWidth={2} />
         </button>
         <button
           type="button"
@@ -294,8 +292,20 @@ export function FileTree({ root, tree, activePath, open = true, onToggle, onOpen
           onMouseLeave={() => setTooltip(null)}
           aria-label="打开文件夹"
         >
-          <FolderOpen className="h-3.5 w-3.5" />
+          <FolderOpenIcon size={20} strokeWidth={2} />
         </button>
+      </div>
+
+      {/* 第二行:工作区名 + 低频工具,对应参考图的双层线性工具栏 */}
+      <div className="flex items-center gap-1.5 px-2" style={{ minHeight: 36 }}>
+        {root ? (
+          <Folder size={15} className="shrink-0 text-[var(--text-tertiary)]" />
+        ) : (
+          <ListBullets size={15} className="shrink-0 text-[var(--text-tertiary)]" />
+        )}
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--text-primary)]">
+          {root ? rootName(root) : "大纲"}
+        </span>
         {root && (
           <button
             type="button"
@@ -305,7 +315,7 @@ export function FileTree({ root, tree, activePath, open = true, onToggle, onOpen
             onMouseLeave={() => setTooltip(null)}
             aria-label="刷新文件树"
           >
-            <RefreshCw className="h-3.5 w-3.5" />
+            <RefreshCcw size={20} strokeWidth={2} />
           </button>
         )}
         {onToggle && (
@@ -317,9 +327,10 @@ export function FileTree({ root, tree, activePath, open = true, onToggle, onOpen
             onMouseLeave={() => setTooltip(null)}
             aria-label="收起侧栏"
           >
-            <PanelLeftClose className="h-3.5 w-3.5" />
+            <PanelLeftClose size={20} strokeWidth={2} />
           </button>
         )}
+      </div>
       </div>
 
       {tooltip && (

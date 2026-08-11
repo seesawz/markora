@@ -4,8 +4,17 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TabBar } from "./TabBar";
 
+const { startDragging } = vi.hoisted(() => ({ startDragging: vi.fn(() => Promise.resolve()) }));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({ startDragging }),
+}));
+
 describe("TabBar", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    startDragging.mockClear();
+  });
 
   const tabs = [
     { path: "/ws/a.md", name: "a.md" },
@@ -20,9 +29,23 @@ describe("TabBar", () => {
     onRename: vi.fn(),
   };
 
-  it("renders nothing when there are no tabs", () => {
+  it("starts native window dragging from an empty titlebar", () => {
     const { container } = render(<TabBar {...baseProps} tabs={[]} activePath={null} />);
-    expect(container.firstChild).toBeNull();
+    const bar = container.firstChild as HTMLElement;
+    expect(bar).not.toBeNull();
+    expect(bar.hasAttribute("data-window-drag-region")).toBe(true);
+    expect(bar.querySelectorAll('[role="tab"]').length).toBe(0);
+    fireEvent.mouseDown(bar, { button: 0 });
+    expect(startDragging).toHaveBeenCalledOnce();
+  });
+
+  it("does not start window dragging from interactive tab controls", () => {
+    render(<TabBar {...baseProps} onNewTab={vi.fn()} />);
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /a/ }), { button: 0 });
+    fireEvent.mouseDown(screen.getByLabelText("关闭 a.md"), { button: 0 });
+    fireEvent.mouseDown(screen.getByLabelText("新建文件"), { button: 0 });
+    expect(startDragging).not.toHaveBeenCalled();
   });
 
   it("renders tab names without the .md extension", () => {

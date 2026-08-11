@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/Select";
-import { Eye, EyeOff, Sparkles, Settings as SettingsIcon } from "lucide-react";
+import { Eye, EyeSlash, GearSix, Sparkle } from "@phosphor-icons/react";
 
 type Lang = "zh" | "en";
 
@@ -205,7 +205,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               </div>
               <div className="flex flex-col gap-0.5">
                 {showAiSettings && (
-                  <NavItem id="ai-service" label={tr.settingsAiCompletion} icon={<Sparkles className="h-4 w-4" />} />
+                  <NavItem id="ai-service" label={tr.settingsAiCompletion} icon={<Sparkle size={16} />} />
                 )}
               </div>
             </div>
@@ -215,7 +215,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 {lang === "zh" ? "外观" : "Appearance"}
               </div>
               <div className="flex flex-col gap-0.5">
-                <NavItem id="appearance" label={tr.settingsAppearance} icon={<SettingsIcon className="h-4 w-4" />} />
+                <NavItem id="appearance" label={tr.settingsAppearance} icon={<GearSix size={16} />} />
               </div>
             </div>
           </nav>
@@ -300,7 +300,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                         onClick={() => setShowKey((v) => !v)}
                         aria-label={showKey ? "隐藏 API Key" : "显示 API Key"}
                       >
-                        {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        {showKey ? <EyeSlash size={14} /> : <Eye size={14} />}
                       </button>
                     </div>
                   </SectionRow>

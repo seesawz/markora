@@ -384,13 +384,13 @@ body {
 .sidebar-expand-btn {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  margin: 8px 0 0 8px;
+  width: 34px;
+  height: 34px;
+  margin-left: 8px;
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
@@ -551,12 +551,12 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 34px;
+  height: 34px;
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
@@ -720,10 +720,10 @@ body {
 
 .tab-bar {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 4px;
   height: 40px;
-  padding: 8px 10px 0;
+  padding: 0 10px;
   flex: none;
   overflow-x: auto;
   overflow-y: hidden;
@@ -732,6 +732,27 @@ body {
 
 .tab-bar::-webkit-scrollbar {
   height: 0;
+}
+
+/* 标签栏末尾的新建按钮(Obsidian 式) */
+.tab-new {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: 0 0 0 2px;
+  flex: none;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.tab-new:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .tab-item {
@@ -766,10 +787,10 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 5px;
   background: transparent;
   color: var(--text-tertiary);
   cursor: pointer;
@@ -814,16 +835,6 @@ body {
   background: rgba(255, 255, 255, 0.16);
   border: 2px solid transparent;
   background-clip: padding-box;
-}
-
-/* Tauri drag region */
-[data-tauri-drag-region] {
-  -webkit-app-region: drag !important;
-  cursor: default;
-}
-
-.no-drag {
-  -webkit-app-region: no-drag !important;
 }
 
 /* Context menu - Kimi: 柔和的中性 hover,不用强调色 */
