@@ -520,31 +520,10 @@ body {
   transition: background-color 0.15s ease;
 }
 
-.sidebar-resize-handle::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 3px;
-  height: 32px;
-  border-radius: 999px;
-  background: var(--text-tertiary);
-  opacity: 0;
-  transform: translate(-50%, -50%);
-  transition: opacity 0.15s ease, height 0.15s ease;
-}
-
 .sidebar-resize-handle:hover,
 .sidebar-resize-handle[data-resizing="true"],
 .sidebar-resize-handle:focus-visible {
   background: var(--selection);
-}
-
-.sidebar-resize-handle:hover::before,
-.sidebar-resize-handle[data-resizing="true"]::before,
-.sidebar-resize-handle:focus-visible::before {
-  height: 42px;
-  opacity: 1;
 }
 
 .sidebar-icon-btn {
