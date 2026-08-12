@@ -23,7 +23,7 @@ interface EditorState {
 
   // Actions
   setContent: (content: string) => void;
-  setFilePath: (path: string | null) => void;
+  setFilePath: (path: string | null, temporaryName?: string) => void;
   setDirty: (dirty: boolean) => void;
   toggleTheme: () => void;
   setTheme: (theme: Theme) => void;
@@ -53,10 +53,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     get().updateStats();
   },
 
-  setFilePath: (path) => {
+  setFilePath: (path, temporaryName) => {
     const fileName = path
       ? path.split(/[\\/]/).pop() || "未命名.md"
-      : "未命名.md";
+      : temporaryName ?? "未命名.md";
     set({ currentFilePath: path, currentFileName: fileName, isDirty: false });
   },
 

@@ -17,12 +17,15 @@ import { useAiStore } from "./store/aiStore";
 import { useWorkspaceStore, type WorkspaceFile } from "./store/workspaceStore";
 import { forgetSpot, rememberSpot } from "./lib/cursorMemory";
 import { handleWindowDragMouseDown } from "./lib/windowDrag";
+import { showErrorToast } from "./lib/toast";
 import { AiCommandModal, type AiCommandStatus } from "./components/AiCommandModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { FileTree } from "./components/FileTree";
 import { TabBar } from "./components/TabBar";
 import { QuickSwitcher, type QuickFile } from "./components/QuickSwitcher";
+import { Toast } from "./components/Toast";
 import { PanelLeftOpen } from "lucide-react";
+import { tiptapToMarkdown } from "./lib/markdownSerializer";
 import typoraCss from "./styles/typora.css?raw";
 
 // macOS Overlay 标题栏:红绿灯悬浮在内容左上角,顶部一行需要避让
@@ -32,6 +35,11 @@ const IS_MAC = navigator.userAgent.includes("Mac");
 
 function getEditor(): any {
   return (window as any).__tiptapEditor ?? null;
+}
+
+function getCurrentEditorContent(): string {
+  const editor = getEditor();
+  return editor ? tiptapToMarkdown(editor.getJSON()) : useEditorStore.getState().content;
 }
 
 async function doCopy(): Promise<void> {
@@ -214,11 +222,13 @@ async function exportHtml(): Promise<void> {
     await invoke("write_file_content", { path: selected, content: full });
   } catch (e) {
     console.error("Failed to export HTML:", e);
+    showErrorToast("导出", e);
   }
 }
 
 async function saveImpl() {
-  const { currentFilePath: path, content, setDirty, currentFileName } = useEditorStore.getState();
+  const { currentFilePath: path, setContent, setDirty, currentFileName } = useEditorStore.getState();
+  const content = getCurrentEditorContent();
   if (!path) {
     const selected = await save({
       defaultPath: currentFileName,
@@ -227,26 +237,36 @@ async function saveImpl() {
     if (!selected) return false;
     try {
       await invoke("write_file_content", { path: selected, content });
+      const ws = useWorkspaceStore.getState();
+      const active = ws.tabs.find((tab) => tab.path === ws.activeTabPath);
+      const name = selected.split(/[\\/]/).pop() || selected;
+      if (active?.temporary) ws.renameTab(active.path, selected, name);
+      else ws.openTab(selected, name);
+      setContent(content);
       useEditorStore.getState().setFilePath(selected);
       return true;
     } catch (e) {
       console.error("Failed to save:", e);
+      showErrorToast("保存", e);
       return false;
     }
   }
   try {
     await invoke("write_file_content", { path, content });
+    setContent(content);
     setDirty(false);
     return true;
   } catch (e) {
     console.error("Failed to save:", e);
+    showErrorToast("保存", e);
     return false;
   }
 }
 
 // 另存为:总是弹出保存对话框,保存后切换到新路径
 async function saveAsImpl(): Promise<void> {
-  const { content, currentFileName } = useEditorStore.getState();
+  const { currentFileName } = useEditorStore.getState();
+  const content = getCurrentEditorContent();
   const selected = await save({
     defaultPath: currentFileName,
     filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
@@ -254,11 +274,16 @@ async function saveAsImpl(): Promise<void> {
   if (!selected) return;
   try {
     await invoke("write_file_content", { path: selected, content });
+    const ws = useWorkspaceStore.getState();
+    const active = ws.tabs.find((tab) => tab.path === ws.activeTabPath);
+    useEditorStore.getState().setContent(content);
     useEditorStore.getState().setFilePath(selected);
     const name = selected.split(/[\\/]/).pop() || selected;
-    useWorkspaceStore.getState().openTab(selected, name);
+    if (active?.temporary) ws.renameTab(active.path, selected, name);
+    else ws.openTab(selected, name);
   } catch (e) {
     console.error("Failed to save as:", e);
+    showErrorToast("另存为", e);
   }
 }
 
@@ -288,6 +313,7 @@ async function openFileFromPath(path: string): Promise<void> {
     useWorkspaceStore.getState().openTab(path, name);
   } catch (e) {
     console.error("Failed to open file:", e);
+    showErrorToast("打开文件", e);
   }
 }
 
@@ -338,17 +364,41 @@ export default function App() {
 
   // --- 工作区 / 标签 ---
 
-  const flushCurrentFile = async () => {
+  const flushCurrentFile = async (): Promise<boolean> => {
     rememberCurrentSpot();
-    const { isDirty, currentFilePath, content } = useEditorStore.getState();
+    const { isDirty, currentFilePath } = useEditorStore.getState();
+    if (isDirty && !currentFilePath) return saveImpl();
     if (isDirty && currentFilePath) {
       try {
+        const content = getCurrentEditorContent();
         await invoke("write_file_content", { path: currentFilePath, content });
+        useEditorStore.getState().setContent(content);
         useEditorStore.getState().setDirty(false);
       } catch (e) {
         console.error("Failed to flush file:", e);
+        showErrorToast("保存", e);
+        return false;
       }
     }
+    return true;
+  };
+
+  const prepareToLeaveCurrentTab = async (): Promise<boolean> => {
+    const ws = useWorkspaceStore.getState();
+    const current = ws.tabs.find((tab) => tab.path === ws.activeTabPath);
+    if (current?.temporary) {
+      const editor = useEditorStore.getState();
+      ws.updateTemporaryTab(current.path, getCurrentEditorContent(), editor.isDirty);
+      return true;
+    }
+    return flushCurrentFile();
+  };
+
+  const loadTemporaryTab = (tab: { name: string; content?: string; dirty?: boolean }) => {
+    const store = useEditorStore.getState();
+    store.setContent(tab.content ?? "");
+    store.setFilePath(null, tab.name);
+    store.setDirty(tab.dirty ?? false);
   };
 
   const loadFileIntoEditor = async (path: string) => {
@@ -359,13 +409,14 @@ export default function App() {
   };
 
   const openFileInWorkspace = async (path: string) => {
-    await flushCurrentFile();
+    if (!(await prepareToLeaveCurrentTab())) return;
     try {
       await loadFileIntoEditor(path);
       const name = path.split(/[\\/]/).pop() || path;
       useWorkspaceStore.getState().openTab(path, name);
     } catch (e) {
       console.error("Failed to open file:", e);
+      showErrorToast("打开文件", e);
     }
   };
 
@@ -377,28 +428,79 @@ export default function App() {
 
   const selectTab = async (path: string) => {
     const ws = useWorkspaceStore.getState();
+    const target = ws.tabs.find((tab) => tab.path === path);
     if (ws.activeTabPath === path && useEditorStore.getState().currentFilePath === path) return;
-    await flushCurrentFile();
+    if (!(await prepareToLeaveCurrentTab())) return;
+    if (target?.temporary) {
+      loadTemporaryTab(target);
+      ws.setActiveTab(path);
+      return;
+    }
     try {
       await loadFileIntoEditor(path);
       ws.setActiveTab(path);
     } catch (e) {
       console.error("Failed to open tab:", e);
+      showErrorToast("打开标签", e);
     }
   };
 
   const closeTab = async (path: string, flush = true) => {
     const ws = useWorkspaceStore.getState();
-    const editorOnTab = useEditorStore.getState().currentFilePath === path;
-    if (editorOnTab && flush) await flushCurrentFile();
-    forgetSpot(path);
-    const nextActive = ws.closeTab(path);
+    const editorOnTab = ws.activeTabPath === path;
+    const tab = ws.tabs.find((item) => item.path === path);
+    let closingPath = path;
+
+    if (tab?.temporary) {
+      const content = editorOnTab ? getCurrentEditorContent() : tab.content ?? "";
+      const dirty = editorOnTab ? useEditorStore.getState().isDirty : tab.dirty ?? false;
+      if (dirty) {
+        const shouldSave = await ask(
+          t("unsavedMsg")(tab.name),
+          { title: t("unsavedTitle"), kind: "warning", okLabel: t("save"), cancelLabel: t("discard") }
+        );
+        if (shouldSave) {
+          if (editorOnTab) {
+            useEditorStore.getState().setContent(content);
+            if (!(await saveImpl())) return;
+            closingPath = useWorkspaceStore.getState().activeTabPath ?? path;
+          } else {
+            const selected = await save({
+              defaultPath: tab.name,
+              filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
+            });
+            if (!selected) return;
+            try {
+              await invoke("write_file_content", { path: selected, content });
+              const name = selected.split(/[\\/]/).pop() || selected;
+              ws.renameTab(path, selected, name);
+              closingPath = selected;
+            } catch (e) {
+              console.error("Failed to save:", e);
+              showErrorToast("保存", e);
+              return;
+            }
+          }
+        }
+      }
+    } else if (editorOnTab && flush && !(await flushCurrentFile())) {
+      return;
+    }
+
+    forgetSpot(closingPath);
+    const nextActive = ws.closeTab(closingPath);
     if (!editorOnTab) return;
     if (nextActive) {
+      const nextTab = ws.tabs.find((tab) => tab.path === nextActive);
+      if (nextTab?.temporary) {
+        loadTemporaryTab(nextTab);
+        return;
+      }
       try {
         await loadFileIntoEditor(nextActive);
       } catch (e) {
         console.error("Failed to load next tab:", e);
+        showErrorToast("打开标签", e);
         const store = useEditorStore.getState();
         store.setContent("");
         store.setFilePath(null);
@@ -420,6 +522,7 @@ export default function App() {
       ws.setTree(next);
     } catch (e) {
       console.error("Failed to scan workspace:", e);
+      showErrorToast("刷新工作区", e);
     }
   };
 
@@ -434,6 +537,7 @@ export default function App() {
       await invoke("rename_path", { from: path, to: newPath });
     } catch (e) {
       console.error("Failed to rename:", e);
+      showErrorToast("重命名", e);
       return;
     }
     const ws = useWorkspaceStore.getState();
@@ -460,6 +564,7 @@ export default function App() {
       await invoke("trash_path", { path });
     } catch (e) {
       console.error("Failed to delete:", e);
+      showErrorToast("删除", e);
       return;
     }
     const ws = useWorkspaceStore.getState();
@@ -472,6 +577,7 @@ export default function App() {
   };
 
   const openFolder = async () => {
+    if (!(await prepareToLeaveCurrentTab())) return;
     const selected = await open({ directory: true, multiple: false });
     if (!selected) return;
     const folder = selected as string;
@@ -484,7 +590,7 @@ export default function App() {
 
   // dir 指定时在该目录下新建(文件树右键),否则用工作区根目录
   const newFileInWorkspace = async (dir?: string) => {
-    await flushCurrentFile();
+    if (!(await prepareToLeaveCurrentTab())) return;
     const rootPath = useWorkspaceStore.getState().root;
     const baseDir = dir ?? rootPath;
     const defaultPath = baseDir ? `${baseDir}/untitled.md` : "untitled.md";
@@ -501,7 +607,23 @@ export default function App() {
       await refreshWorkspaceTree();
     } catch (e) {
       console.error("Failed to create file:", e);
+      showErrorToast("新建文件", e);
     }
+  };
+
+  // 标签栏加号：立即创建内存中的空白文档，首次保存时再选择位置。
+  const newBlankTab = async () => {
+    if (!(await prepareToLeaveCurrentTab())) return;
+    const ws = useWorkspaceStore.getState();
+    const key = `markora:untitled:${Date.now()}`;
+    const count = ws.tabs.filter((tab) => tab.temporary).length + 1;
+    const name = count === 1 ? "未命名.md" : `未命名 ${count}.md`;
+    const store = useEditorStore.getState();
+    store.setContent("");
+    store.setFilePath(null, name);
+    store.setDirty(false);
+    ws.openTab(key, name, true);
+    requestAnimationFrame(() => getEditor()?.chain().focus("start").run());
   };
 
   // 文件树右键:在指定目录下新建文件夹
@@ -514,6 +636,7 @@ export default function App() {
       await refreshWorkspaceTree();
     } catch (e) {
       console.error("Failed to create folder:", e);
+      showErrorToast("新建文件夹", e);
     }
   };
 
@@ -782,7 +905,7 @@ export default function App() {
             onClose={(path) => closeTab(path)}
             onRename={handleTreeRename}
             onReorder={(from, to) => useWorkspaceStore.getState().moveTab(from, to)}
-            onNewTab={() => newFileInWorkspace()}
+            onNewTab={newBlankTab}
                 />
               </div>
             </div>
@@ -839,6 +962,7 @@ export default function App() {
           onClose={closeAiCommand}
         />
       )}
+      <Toast />
     </div>
   );
 }

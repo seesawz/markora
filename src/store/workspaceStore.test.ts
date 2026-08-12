@@ -25,6 +25,38 @@ describe("workspaceStore", () => {
     expect(useWorkspaceStore.getState().activeTabPath).toBe("/a.md");
   });
 
+  it("opens an unsaved temporary tab", () => {
+    useWorkspaceStore.getState().openTab("markora:untitled:1", "未命名.md", true);
+
+    expect(useWorkspaceStore.getState().tabs).toEqual([
+      { path: "markora:untitled:1", name: "未命名.md", temporary: true },
+    ]);
+  });
+
+  it("keeps temporary content while another tab is active", () => {
+    const store = useWorkspaceStore.getState();
+    store.openTab("markora:untitled:1", "未命名.md", true);
+    store.updateTemporaryTab("markora:untitled:1", "草稿内容\n", true);
+    store.openTab("/notes/saved.md", "saved.md");
+
+    expect(useWorkspaceStore.getState().tabs[0]).toEqual({
+      path: "markora:untitled:1",
+      name: "未命名.md",
+      temporary: true,
+      content: "草稿内容\n",
+      dirty: true,
+    });
+  });
+
+  it("turns a temporary tab into a regular tab after its first save", () => {
+    const store = useWorkspaceStore.getState();
+    store.openTab("markora:untitled:1", "未命名.md", true);
+    store.renameTab("markora:untitled:1", "/notes/saved.md", "saved.md");
+
+    expect(useWorkspaceStore.getState().tabs).toEqual([{ path: "/notes/saved.md", name: "saved.md" }]);
+    expect(useWorkspaceStore.getState().activeTabPath).toBe("/notes/saved.md");
+  });
+
   it("closing an inactive tab keeps the active tab", () => {
     useWorkspaceStore.getState().openTab("/a.md", "a.md");
     useWorkspaceStore.getState().openTab("/b.md", "b.md");

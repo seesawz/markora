@@ -83,14 +83,54 @@ function TreeItem({ node, depth, activePath, expanded, renamingPath, onToggle, o
     if (value && value !== base) onCommitRename(node.path, value + ext);
   };
 
+  const handleRowKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.target !== event.currentTarget) return;
+    const rows = Array.from(event.currentTarget.closest(".tree-list")?.querySelectorAll<HTMLButtonElement>(".tree-row") ?? []);
+    const index = rows.indexOf(event.currentTarget);
+    if (event.key === "F2") {
+      event.preventDefault();
+      onStartRename(node.path);
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      rows[index + (event.key === "ArrowDown" ? 1 : -1)]?.focus();
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (node.isDir) onToggle(node.path, depth);
+      else onOpenFile(node.path);
+      return;
+    }
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      if (node.isDir && expandedValue) onToggle(node.path, depth);
+      else {
+        [...rows.slice(0, index)].reverse().find((row) => Number(row.dataset.depth) < depth)?.focus();
+      }
+      return;
+    }
+    if (node.isDir && event.key === "ArrowRight") {
+      event.preventDefault();
+      if (!expandedValue) onToggle(node.path, depth);
+      else {
+        const child = rows[index + 1];
+        if (child && Number(child.dataset.depth) > depth) child.focus();
+      }
+    }
+  };
+
   if (node.isDir) {
     return (
       <>
         <button
           type="button"
           className="tree-row"
+          data-depth={depth}
           style={{ paddingLeft: `${6 + depth * 14}px` }}
           onClick={() => onToggle(node.path, depth)}
+          onKeyDown={handleRowKeyDown}
           onContextMenu={(e) => {
             e.preventDefault();
             onContextMenu({ x: e.clientX, y: e.clientY, path: node.path, isDir: true });
@@ -148,8 +188,10 @@ function TreeItem({ node, depth, activePath, expanded, renamingPath, onToggle, o
     <button
       type="button"
       className={`tree-row ${active ? "tree-row-active" : ""}`}
+      data-depth={depth}
       style={{ paddingLeft: `${6 + depth * 14 + 14}px` }}
       onClick={() => onOpenFile(node.path)}
+      onKeyDown={handleRowKeyDown}
       onContextMenu={(e) => {
         e.preventDefault();
         onContextMenu({ x: e.clientX, y: e.clientY, path: node.path, isDir: false });
@@ -383,7 +425,7 @@ export function FileTree({ root, tree, activePath, open = true, onToggle, onOpen
         </div>
       ) : (
         // 工作区模式：只显示文件树（大纲仅在无工作区时显示）
-        <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+        <div className="tree-list min-h-0 flex-1 overflow-y-auto pb-2">
           {tree.map((node) => (
             <TreeItem
               key={node.path}

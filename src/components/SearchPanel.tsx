@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { Editor } from "@tiptap/react";
 import { useT } from "../lib/i18n";
+import { setSearchHighlights, type SearchMatch } from "../lib/searchHighlight";
 
 interface Props {
   editor: Editor | null;
@@ -14,8 +15,8 @@ const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // 遍历文本块计算匹配的真实 ProseMirror 位置。
 // 文本块内 inline 偏移与文本下标一致:非文本 inline 节点(图片/硬换行)按 nodeSize 用占位符补齐,
 // 既保持对齐又阻断跨节点误匹配;加粗等 mark 边界的相邻文本节点位置连续,跨边界匹配仍然正确。
-function findMatches(editor: Editor, query: string): { from: number; to: number }[] {
-  const results: { from: number; to: number }[] = [];
+export function findMatches(editor: Editor, query: string): SearchMatch[] {
+  const results: SearchMatch[] = [];
   if (!query) return results;
   const regex = new RegExp(escapeRegExp(query), "gi");
   editor.state.doc.descendants((node, pos) => {
@@ -40,58 +41,74 @@ export function SearchPanel({ editor, onClose, initialQuery = "", initialShowRep
   const [query, setQuery] = useState(initialQuery);
   const [replace, setReplace] = useState("");
   const [showReplace, setShowReplace] = useState(initialShowReplace);
-  const [matchCount, setMatchCount] = useState(0);
+  const [matches, setMatches] = useState<SearchMatch[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
-    if (initialQuery) applyQuery(initialQuery);
+    if (initialQuery) updateMatches(initialQuery);
+    return () => {
+      if (editor) setSearchHighlights(editor, [], -1);
+    };
+    // editor only changes when the panel is recreated
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const applyQuery = useCallback(
-    (q: string) => {
+  const updateMatches = useCallback(
+    (q: string, preferredIndex = 0) => {
       if (!editor) return;
-      setMatchCount(q ? findMatches(editor, q).length : 0);
+      const next = q ? findMatches(editor, q) : [];
+      const nextIndex = next.length ? Math.min(preferredIndex, next.length - 1) : -1;
+      setMatches(next);
+      setCurrentIndex(nextIndex);
+      setSearchHighlights(editor, next, nextIndex);
     },
     [editor]
   );
 
-  const onQueryChange = (v: string) => { setQuery(v); applyQuery(v); };
+  useEffect(() => {
+    if (!editor) return;
+    const refresh = () => updateMatches(query);
+    editor.on("update", refresh);
+    return () => {
+      editor.off("update", refresh);
+    };
+  }, [editor, query, updateMatches]);
+
+  const onQueryChange = (v: string) => { setQuery(v); updateMatches(v); };
   const onReplaceChange = (v: string) => { setReplace(v); };
 
-  const findNext = () => {
-    if (!editor || !query) return;
-    const matches = findMatches(editor, query);
-    if (!matches.length) return;
-    const { to } = editor.state.selection;
-    const next = matches.find((m) => m.from >= to) ?? matches[0];
-    editor.chain().focus().setTextSelection(next).run();
+  const selectMatch = (index: number) => {
+    if (!editor || !matches.length) return;
+    const nextIndex = (index + matches.length) % matches.length;
+    setCurrentIndex(nextIndex);
+    setSearchHighlights(editor, matches, nextIndex);
+    editor.chain().focus().setTextSelection(matches[nextIndex]).scrollIntoView().run();
   };
 
-  const findPrevious = () => {
-    if (!editor || !query) return;
-    const matches = findMatches(editor, query);
-    if (!matches.length) return;
-    const { from } = editor.state.selection;
-    const prev = [...matches].reverse().find((m) => m.to <= from) ?? matches[matches.length - 1];
-    editor.chain().focus().setTextSelection(prev).run();
-  };
+  const findNext = () => selectMatch(currentIndex + 1);
+  const findPrevious = () => selectMatch(currentIndex - 1);
 
   const replaceNext = () => {
-    if (!editor || !query) return;
-    const { from, to } = editor.state.selection;
-    const selectedText = editor.state.doc.textBetween(from, to);
-    if (selectedText.toLowerCase() === query.toLowerCase()) {
-      if (replace) {
-        editor.chain().focus().insertContentAt({ from, to }, replace).run();
-      } else {
-        editor.chain().focus().deleteRange({ from, to }).run();
-      }
-      applyQuery(query);
+    if (!editor || !query || currentIndex < 0) return;
+    const target = matches[currentIndex];
+    const selectedText = editor.state.doc.textBetween(target.from, target.to);
+    if (selectedText.toLowerCase() !== query.toLowerCase()) {
+      updateMatches(query, currentIndex);
+      return;
     }
-    findNext();
+    const chain = editor.chain().focus();
+    if (replace) chain.insertContentAt(target, replace).run();
+    else chain.deleteRange(target).run();
+
+    const next = findMatches(editor, query);
+    const nextIndex = next.length ? currentIndex % next.length : -1;
+    setMatches(next);
+    setCurrentIndex(nextIndex);
+    setSearchHighlights(editor, next, nextIndex);
+    if (nextIndex >= 0) editor.chain().focus().setTextSelection(next[nextIndex]).scrollIntoView().run();
   };
 
   const replaceAll = () => {
@@ -104,7 +121,7 @@ export function SearchPanel({ editor, onClose, initialQuery = "", initialShowRep
       chain = replace ? chain.insertContentAt({ from: m.from, to: m.to }, replace) : chain.deleteRange(m);
     }
     chain.run();
-    setMatchCount(0);
+    updateMatches(query);
   };
 
   const handleKey = (e: React.KeyboardEvent) => {
@@ -172,7 +189,7 @@ export function SearchPanel({ editor, onClose, initialQuery = "", initialShowRep
           }}
         />
         <span style={{ fontSize: 11, color: "var(--text-tertiary)", minWidth: 34, textAlign: "center" }}>
-          {query ? (matchCount > 0 ? matchCount : tr.noResults) : ""}
+          {query ? (matches.length > 0 ? `${currentIndex + 1} / ${matches.length}` : tr.noResults) : ""}
         </span>
         {btn("↑", findPrevious, tr.prev)}
         {btn("↓", findNext, tr.next)}

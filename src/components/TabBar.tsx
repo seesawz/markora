@@ -86,7 +86,7 @@ export function TabBar({ tabs, activePath, onSelect, onClose, onRename, onReorde
                 onClose(tab.path);
               }
             }}
-            title={tab.path}
+            title={tab.temporary ? "未保存的新文件" : tab.path}
           >
             {renaming ? (
               // 镜像文本撑开容器,输入框宽度始终贴合文件名(中英文都精确)
@@ -114,6 +114,7 @@ export function TabBar({ tabs, activePath, onSelect, onClose, onRename, onReorde
               <span
                 className="min-w-0 flex-1 truncate text-[12.5px]"
                 onDoubleClick={(event) => {
+                  if (tab.temporary) return;
                   event.stopPropagation();
                   setRenamingPath(tab.path);
                 }}

@@ -878,6 +878,64 @@ body {
   background: var(--bg-active);
 }
 
+.context-menu-item:focus-visible {
+  background: var(--bg-active);
+  outline: none;
+}
+
+.app-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 44px;
+  z-index: 40000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(380px, calc(100vw - 32px));
+  padding: 9px 10px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: #d14343;
+  box-shadow: var(--shadow-md);
+  font-size: 12.5px;
+}
+
+.app-toast button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  flex: none;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.app-toast button:hover {
+  background: var(--bg-hover);
+}
+
+.search-match {
+  border-radius: 2px;
+  background: rgba(250, 204, 21, 0.36);
+}
+
+.search-match-current {
+  background: rgba(245, 158, 11, 0.58);
+  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.5);
+}
+
+:root.dark .search-match {
+  background: rgba(202, 138, 4, 0.34);
+}
+
+:root.dark .search-match-current {
+  background: rgba(217, 119, 6, 0.58);
+}
+
 .context-menu-item:disabled {
   color: var(--text-tertiary);
   cursor: default;

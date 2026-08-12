@@ -10,6 +10,9 @@ export interface WorkspaceFile {
 export interface WorkspaceTab {
   path: string;
   name: string;
+  temporary?: boolean;
+  content?: string;
+  dirty?: boolean;
 }
 
 const MAX_TABS = 20;
@@ -22,7 +25,8 @@ interface WorkspaceState {
 
   setRoot: (root: string | null) => void;
   setTree: (tree: WorkspaceFile[] | null) => void;
-  openTab: (path: string, name: string) => void;
+  openTab: (path: string, name: string, temporary?: boolean) => void;
+  updateTemporaryTab: (path: string, content: string, dirty: boolean) => void;
   /** 文件重命名后同步标签路径 */
   renameTab: (oldPath: string, newPath: string, newName: string) => void;
   /** 关闭标签，返回新的激活路径（null 表示没有剩余标签） */
@@ -42,13 +46,19 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   setTree: (tree) => set({ tree }),
 
-  openTab: (path, name) => {
+  openTab: (path, name, temporary = false) => {
     const { tabs } = get();
     if (!tabs.some((tab) => tab.path === path)) {
-      const next = [...tabs, { path, name }];
+      const next = [...tabs, { path, name, ...(temporary ? { temporary: true } : {}) }];
       set({ tabs: next.length > MAX_TABS ? next.slice(next.length - MAX_TABS) : next });
     }
     set({ activeTabPath: path });
+  },
+
+  updateTemporaryTab: (path, content, dirty) => {
+    set(({ tabs }) => ({
+      tabs: tabs.map((tab) => (tab.path === path && tab.temporary ? { ...tab, content, dirty } : tab)),
+    }));
   },
 
   renameTab: (oldPath, newPath, newName) => {

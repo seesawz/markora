@@ -119,6 +119,26 @@ describe("FileTree", () => {
     expect(screen.getByText("note")).toBeTruthy();
   });
 
+  it("supports arrow navigation, Enter, and F2 in the file tree", () => {
+    const onOpenFile = vi.fn();
+    render(<FileTree {...baseProps} onOpenFile={onOpenFile} />);
+
+    const docs = screen.getByText("docs").closest("button") as HTMLButtonElement;
+    const note = screen.getByText("note").closest("button") as HTMLButtonElement;
+    docs.focus();
+    fireEvent.keyDown(docs, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(note);
+
+    fireEvent.keyDown(note, { key: "Enter" });
+    expect(onOpenFile).toHaveBeenCalledWith("/ws/docs/note.md");
+
+    fireEvent.keyDown(note, { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(docs);
+
+    fireEvent.keyDown(note, { key: "F2" });
+    expect(screen.getByDisplayValue("note")).toBeTruthy();
+  });
+
   it("shows the empty state when there is no tree", () => {
     render(<FileTree {...baseProps} tree={null} />);
 

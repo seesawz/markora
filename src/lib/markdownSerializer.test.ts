@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from "vitest";
-import { markdownToTiptap } from "./markdownSerializer";
+import { markdownToTiptap, tiptapToMarkdown } from "./markdownSerializer";
 
 describe("markdownToTiptap", () => {
   it("wraps formatted list text in paragraphs for character-level selection", () => {
@@ -18,5 +18,14 @@ describe("markdownToTiptap", () => {
       expect(item.content?.[0]?.type).toBe("paragraph");
       expect(item.content?.[0]?.content?.some((node) => node.marks?.some((mark) => mark.type === "bold"))).toBe(true);
     }
+  });
+
+  it("keeps soft line breaks inside a paragraph and blank lines between paragraphs", () => {
+    const doc = markdownToTiptap("first line\nsecond line\n\nnext paragraph");
+
+    expect(doc.content).toHaveLength(2);
+    expect(doc.content?.[0]?.type).toBe("paragraph");
+    expect(doc.content?.[0]?.content?.some((node) => node.type === "hardBreak")).toBe(true);
+    expect(tiptapToMarkdown(doc)).toBe("first line\nsecond line\n\nnext paragraph\n");
   });
 });

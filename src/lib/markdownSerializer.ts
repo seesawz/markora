@@ -27,7 +27,10 @@ function htmlToTiptap(html: string): JSONContent {
 
   function parseNode(node: Node): JSONContent | JSONContent[] | null {
     if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent || "";
+      // markdown-it 会在 <br> 后输出一个用于格式化 HTML 的换行，不是第二个语义换行。
+      const text = node.previousSibling?.nodeName === "BR"
+        ? (node.textContent || "").replace(/^\n/, "")
+        : node.textContent || "";
       if (!text.trim()) return null;
       return { type: "text", text };
     }
@@ -49,26 +52,6 @@ function htmlToTiptap(html: string): JSONContent {
 
     if (tag === "p") {
       const content = parseChildren(el);
-      // 如果段落里有 hardBreak,拆成多个独立段落(每行一个),避免选区被限制在单一段落内
-      const hasHardBreak = content.some((c) => c.type === "hardBreak");
-      if (hasHardBreak) {
-        const paragraphs: JSONContent[] = [];
-        let current: JSONContent[] = [];
-        for (const item of content) {
-          if (item.type === "hardBreak") {
-            if (current.length > 0) {
-              paragraphs.push({ type: "paragraph", content: current });
-            }
-            current = [];
-          } else {
-            current.push(item);
-          }
-        }
-        if (current.length > 0) {
-          paragraphs.push({ type: "paragraph", content: current });
-        }
-        return paragraphs;
-      }
       return {
         type: "paragraph",
         content: content.length > 0 ? content : [{ type: "text", text: "" }],

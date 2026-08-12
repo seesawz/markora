@@ -15,6 +15,8 @@ import { t } from "../lib/i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir } from "@tauri-apps/api/path";
 import { SearchPanel } from "./SearchPanel";
+import { SearchHighlight } from "../lib/searchHighlight";
+import { useWorkspaceStore } from "../store/workspaceStore";
 
 // 从 TipTap Editor 获取纯文本（用于统计）
 function getTextFromEditor(editor: Editor): string {
@@ -32,6 +34,7 @@ export function TipTapEditor() {
   const content = useEditorStore((s) => s.content);
   const theme = useEditorStore((s) => s.theme);
   const isDirty = useEditorStore((s) => s.isDirty);
+  const activeTabPath = useWorkspaceStore((s) => s.activeTabPath);
 
   const isDark = theme === "dark";
   const [searchOpen, setSearchOpen] = useState(false);
@@ -39,6 +42,7 @@ export function TipTapEditor() {
   const editorRef = useRef<Editor | null>(null);
   const contentTimer = useRef<number | null>(null);
   const cursorRaf = useRef<number | null>(null);
+  const loadedTabPath = useRef<string | null>(null);
 
   // 拖拽选择时 selection 每次 mousemove 都变,用 rAF 合帧后再写入 store
   const reportCursor = () => {
@@ -74,6 +78,7 @@ export function TipTapEditor() {
       TaskItem.configure({
         nested: true,
       }),
+      SearchHighlight,
     ],
     content: content ? markdownToTiptap(content) : "",
     editorProps: {
@@ -162,9 +167,12 @@ export function TipTapEditor() {
       // 节流保存内容
       if (contentTimer.current !== null) window.clearTimeout(contentTimer.current);
       useEditorStore.getState().setDirty(true);
+      const tabPath = useWorkspaceStore.getState().activeTabPath;
+      const markdown = getMarkdownFromEditor(editor);
       contentTimer.current = window.setTimeout(() => {
-        const markdown = getMarkdownFromEditor(editor);
-        useEditorStore.getState().setContent(markdown);
+        if (useWorkspaceStore.getState().activeTabPath === tabPath) {
+          useEditorStore.getState().setContent(markdown);
+        }
       }, 500);
 
       reportCursor();
@@ -185,12 +193,17 @@ export function TipTapEditor() {
 
   // 外部加载新文件
   useEffect(() => {
-    if (!editor || isDirty) return;
+    if (!editor) return;
+    const tabChanged = loadedTabPath.current !== activeTabPath;
+    if (isDirty && !tabChanged) return;
     const currentMarkdown = getMarkdownFromEditor(editor);
-    if (currentMarkdown === content) return;
+    if (currentMarkdown !== content) {
+      const tiptapContent = markdownToTiptap(content);
+      editor.commands.setContent(tiptapContent, { emitUpdate: false });
+    }
 
-    const tiptapContent = markdownToTiptap(content);
-    editor.commands.setContent(tiptapContent);
+    loadedTabPath.current = activeTabPath;
+    if (!tabChanged) return;
 
     // 恢复该文件上次的光标与滚动位置(会话级记忆,Obsidian 式)
     const path = useEditorStore.getState().currentFilePath;
@@ -203,8 +216,12 @@ export function TipTapEditor() {
       });
     } else {
       editor.view.dom.scrollTop = 0;
+      editor.commands.setTextSelection(1);
     }
-  }, [content, editor, isDirty]);
+    if (activeTabPath) {
+      requestAnimationFrame(() => editorRef.current?.commands.focus());
+    }
+  }, [activeTabPath, content, editor, isDirty]);
 
   // 主题切换
   useEffect(() => {
