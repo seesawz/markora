@@ -8,7 +8,6 @@ import Typography from "@tiptap/extension-typography";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { useEditorStore } from "../store/editorStore";
-import { useAiStore } from "../store/aiStore";
 import { markdownToTiptap, tiptapToMarkdown } from "../lib/markdownSerializer";
 import { recallSpot } from "../lib/cursorMemory";
 import { t } from "../lib/i18n";
@@ -235,16 +234,6 @@ export function TipTapEditor() {
       },
     });
   }, [isDark, editor]);
-
-  // AI 补全（简化版，先禁用）
-  useEffect(() => {
-    const unsub = useAiStore.subscribe((state, previous) => {
-      if (state.enabled !== previous.enabled && !state.enabled && editorRef.current) {
-        // 清除 AI 状态
-      }
-    });
-    return unsub;
-  }, []);
 
   if (!editor) {
     return <div className="h-full w-full flex items-center justify-center text-[var(--text-tertiary)]">加载中...</div>;

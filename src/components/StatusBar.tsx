@@ -1,7 +1,7 @@
 import { useEditorStore } from "../store/editorStore";
 import { useAiStore } from "../store/aiStore";
 import { useT } from "../lib/i18n";
-import { CircleNotch, GearSix, Sparkle, WarningCircle } from "@phosphor-icons/react";
+import { CircleNotch, GearSix, WarningCircle } from "@phosphor-icons/react";
 
 interface StatusBarProps {
   onOpenSettings: () => void;
@@ -16,15 +16,10 @@ export function StatusBar({ onOpenSettings }: StatusBarProps) {
   const cursorColumn = useEditorStore((s) => s.cursorColumn);
   const wordCount = useEditorStore((s) => s.wordCount);
   const charCount = useEditorStore((s) => s.charCount);
-  const aiEnabled = useAiStore((s) => s.enabled);
   const isGenerating = useAiStore((s) => s.isGenerating);
   const aiError = useAiStore((s) => s.error);
-  const setEnabled = useAiStore((s) => s.setEnabled);
 
   const tr = useT();
-
-  const aiTitle = isGenerating ? "AI 生成中…" : aiEnabled ? "AI 续写：开" : "AI 续写：关";
-  const aiColor = aiEnabled ? "var(--accent)" : "var(--text-tertiary)";
 
   return (
     <div
@@ -61,20 +56,7 @@ export function StatusBar({ onOpenSettings }: StatusBarProps) {
 
       {/* Right: icons + cursor + counts */}
       <span className="flex items-center" style={{ gap: 8, color: "var(--text-tertiary)" }}>
-        <button
-          type="button"
-          className="grid place-items-center h-6 w-6 rounded transition-colors hover:bg-[var(--bg-hover)]"
-          style={{ color: aiColor }}
-          onClick={() => setEnabled(!aiEnabled)}
-          title={aiTitle}
-          aria-label={aiTitle}
-        >
-          {isGenerating ? (
-            <CircleNotch size={13} className="animate-spin" />
-          ) : (
-            <Sparkle size={13} />
-          )}
-        </button>
+        {isGenerating && <CircleNotch size={13} className="animate-spin" aria-label="AI 生成中" />}
         <button
           type="button"
           className="grid place-items-center h-6 w-6 rounded transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"

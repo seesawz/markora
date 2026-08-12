@@ -1,12 +1,12 @@
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Mutex;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::{Emitter, Manager, WindowEvent};
+use std::fs;
+use std::path::PathBuf;
+use std::sync::Mutex;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 use tauri::RunEvent;
+use tauri::{Emitter, Manager, WindowEvent};
 
 #[tauri::command]
 fn read_file_content(path: &str) -> Result<String, String> {
@@ -49,7 +49,16 @@ struct WorkspaceEntry {
 }
 
 // 忽略的目录：版本控制、构建产物、依赖、工具目录
-const SKIP_DIRS: [&str; 8] = [".git", ".svn", ".hg", "node_modules", "target", "dist", ".obsidian", ".trash"];
+const SKIP_DIRS: [&str; 8] = [
+    ".git",
+    ".svn",
+    ".hg",
+    "node_modules",
+    "target",
+    "dist",
+    ".obsidian",
+    ".trash",
+];
 const MAX_SCAN_DEPTH: usize = 8;
 
 fn scan_dir(dir: &std::path::Path, depth: usize) -> Result<Vec<WorkspaceEntry>, String> {
@@ -83,7 +92,10 @@ fn scan_dir(dir: &std::path::Path, depth: usize) -> Result<Vec<WorkspaceEntry>, 
             continue; // 空目录不展示
         }
         entries.push(WorkspaceEntry {
-            name: d.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+            name: d
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default(),
             path: d.to_string_lossy().to_string(),
             is_dir: true,
             children,
@@ -91,7 +103,10 @@ fn scan_dir(dir: &std::path::Path, depth: usize) -> Result<Vec<WorkspaceEntry>, 
     }
     for f in files {
         entries.push(WorkspaceEntry {
-            name: f.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+            name: f
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default(),
             path: f.to_string_lossy().to_string(),
             is_dir: false,
             children: Vec::new(),
@@ -196,7 +211,10 @@ fn get_ai_config(app: tauri::AppHandle) -> Result<AiConfigResponse, String> {
 }
 
 #[tauri::command]
-fn save_ai_config(app: tauri::AppHandle, request: AiConfigRequest) -> Result<AiConfigResponse, String> {
+fn save_ai_config(
+    app: tauri::AppHandle,
+    request: AiConfigRequest,
+) -> Result<AiConfigResponse, String> {
     let provider = request.provider.trim();
     if provider != "openai" && provider != "anthropic" {
         return Err("不支持的 API 格式".to_string());
@@ -273,7 +291,11 @@ fn extract_content(value: &Value, provider: &str) -> String {
     if let Some(blocks) = message["content"].as_array() {
         return blocks
             .iter()
-            .filter_map(|b| b.get("text").and_then(|t| t.as_str()).or_else(|| b.as_str()))
+            .filter_map(|b| {
+                b.get("text")
+                    .and_then(|t| t.as_str())
+                    .or_else(|| b.as_str())
+            })
             .collect::<Vec<_>>()
             .join("");
     }
@@ -316,7 +338,8 @@ async fn complete_ai_request(
         let authorization = format!("Bearer {}", api_key);
         headers.insert(
             AUTHORIZATION,
-            HeaderValue::from_str(&authorization).map_err(|_| "API Key 含有非法字符".to_string())?,
+            HeaderValue::from_str(&authorization)
+                .map_err(|_| "API Key 含有非法字符".to_string())?,
         );
         json!({
             "model": model,
@@ -364,12 +387,34 @@ async fn test_ai_connection(app: tauri::AppHandle, request: AiConfigRequest) -> 
 }
 
 #[tauri::command]
-async fn complete_ai(app: tauri::AppHandle, request: AiCompletionRequest) -> Result<String, String> {
+async fn complete_ai(
+    app: tauri::AppHandle,
+    request: AiCompletionRequest,
+) -> Result<String, String> {
     let config = read_ai_config(&app)?;
-    let provider = if request.provider.trim().is_empty() { config.provider } else { request.provider };
-    let base_url = if request.base_url.trim().is_empty() { config.base_url } else { request.base_url };
-    let model = if request.model.trim().is_empty() { config.model } else { request.model };
-    complete_ai_request(&provider, &base_url, &model, config_api_key(&app)?, &request.prompt).await
+    let provider = if request.provider.trim().is_empty() {
+        config.provider
+    } else {
+        request.provider
+    };
+    let base_url = if request.base_url.trim().is_empty() {
+        config.base_url
+    } else {
+        request.base_url
+    };
+    let model = if request.model.trim().is_empty() {
+        config.model
+    } else {
+        request.model
+    };
+    complete_ai_request(
+        &provider,
+        &base_url,
+        &model,
+        config_api_key(&app)?,
+        &request.prompt,
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -459,11 +504,13 @@ mod tests {
 #[tauri::command]
 fn save_clipboard_image(dir: &str, name: &str) -> Result<String, String> {
     use arboard::Clipboard;
-    use image::{ImageBuffer, Rgba};
     use image::ImageEncoder;
+    use image::{ImageBuffer, Rgba};
 
     let mut cb = Clipboard::new().map_err(|e| e.to_string())?;
-    let img = cb.get_image().map_err(|e| format!("no clipboard image: {}", e))?;
+    let img = cb
+        .get_image()
+        .map_err(|e| format!("no clipboard image: {}", e))?;
     let (w, h) = (img.width as u32, img.height as u32);
 
     let buf: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(w, h, img.bytes.into_owned())
@@ -529,7 +576,11 @@ pub fn run() {
                 .filter_map(|a| {
                     let p = PathBuf::from(&a);
                     if p.is_file() {
-                        Some(p.canonicalize().map(|c| c.to_string_lossy().to_string()).unwrap_or(a))
+                        Some(
+                            p.canonicalize()
+                                .map(|c| c.to_string_lossy().to_string())
+                                .unwrap_or(a),
+                        )
                     } else {
                         None
                     }
@@ -561,7 +612,11 @@ pub fn run() {
                             .iter()
                             .filter_map(|p| {
                                 let s = p.to_string_lossy().to_string();
-                                if is_markdown_path(&s) { Some(s) } else { None }
+                                if is_markdown_path(&s) {
+                                    Some(s)
+                                } else {
+                                    None
+                                }
                             })
                             .collect();
                         if !files.is_empty() {

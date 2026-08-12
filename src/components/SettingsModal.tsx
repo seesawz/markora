@@ -6,7 +6,6 @@ import { useT } from "@/lib/i18n";
 import { rebuildMenu } from "@/lib/menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -54,7 +53,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     const q = query.trim().toLowerCase();
     if (!q) return true;
     const keywords = [
-      "ai", "ai 续写", "续写", "completion", "complete",
+      "ai", "ai 指令", "指令", "command",
       "服务", "service", "模型", "model", "api key", "api", "key",
       "base url", "base", "url", "openai", "anthropic", "claude", "gpt",
       "设置", "settings",
@@ -229,25 +228,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 <h1 id="settings-title" className="text-[15px] font-semibold text-foreground mb-2">
                   {tr.settingsAiCompletion}
                 </h1>
-
-                <Section title={tr.autoCompletionTitle}>
-                  <SectionRow
-                    label={tr.enableCompletion}
-                    description={tr.enableCompletionDesc}
-                  >
-                    <Switch
-                      aria-label={tr.enableCompletion}
-                      checked={config.enabled}
-                      onCheckedChange={(checked) => {
-                        if (checked && !config.apiKey) {
-                          setMessage(tr.apiKeyRequiredMessage);
-                          return;
-                        }
-                        config.setEnabled(checked);
-                      }}
-                    />
-                  </SectionRow>
-                </Section>
 
                 <Section title={tr.modelService}>
                   <SectionRow label={tr.apiFormat} description={tr.apiFormatDesc}>

@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 
 - `src/`: React 19 and TypeScript UI code. Components live in `src/components/`, shared operations and AI integration in `src/lib/`, and Zustand stores in `src/store/`.
-- `src-tauri/`: Rust commands, native file operations, AI HTTP requests, secure key storage, and Tauri configuration.
+- `src-tauri/`: Rust commands, native file operations, AI HTTP requests, local AI configuration, and Tauri configuration.
 - `public/`: static assets. `src/styles/` contains global and Typora-style CSS.
 - Rust unit tests are colocated in `src-tauri/src/lib.rs`.
 
@@ -47,4 +47,4 @@ Recent history uses prefixes such as `feat:`, `fix:`, and `release:`; follow tha
 
 ## Security & Configuration
 
-Never commit API keys, local config files, or generated bundles. AI requests are implemented in Rust, and API keys should remain in the system keychain. Preserve the separation between frontend settings and native secret storage when adding providers or configuration fields.
+Never commit API keys, local config files, or generated bundles. AI requests and configuration persistence are implemented in Rust; never log or expose stored API keys. Preserve the separation between frontend settings and native configuration handling when adding providers or fields.

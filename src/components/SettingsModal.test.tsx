@@ -40,7 +40,6 @@ describe("SettingsModal", () => {
       baseUrl: "https://api.openai.com/v1",
       model: "gpt-4o-mini",
       apiKey: "",
-      enabled: false,
       isGenerating: false,
       error: null,
     });
@@ -107,15 +106,15 @@ describe("SettingsModal", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "搜索设置..." }), { target: { value: "不存在" } });
 
     expect(screen.getByRole("heading", { name: "未找到设置" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "AI 续写" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "AI 服务" })).toBeNull();
   });
 
-  it("shows the AI page when searching for the completion feature by name", () => {
+  it("shows the AI page when searching for commands by name", () => {
     render(<SettingsModal open onClose={vi.fn()} />);
 
-    fireEvent.change(screen.getByRole("textbox", { name: "搜索设置..." }), { target: { value: "续写" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "搜索设置..." }), { target: { value: "指令" } });
 
-    expect(screen.getByRole("button", { name: "AI 续写" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "AI 服务" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "未找到设置" })).toBeNull();
   });
 
@@ -131,14 +130,4 @@ describe("SettingsModal", () => {
     expect(rebuildMenuMock).toHaveBeenCalledOnce();
   });
 
-  it("enables inline completion after an API Key is configured", async () => {
-    const user = userEvent.setup();
-    useAiStore.setState({ apiKey: "sk-test" });
-    render(<SettingsModal open onClose={vi.fn()} />);
-
-    const toggle = screen.getByRole("switch", { name: "启用 AI 续写" });
-    await user.click(toggle);
-
-    expect(useAiStore.getState().enabled).toBe(true);
-  });
 });
