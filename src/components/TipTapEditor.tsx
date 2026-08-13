@@ -210,15 +210,21 @@ export function TipTapEditor() {
     if (spot) {
       const maxPos = editor.state.doc.content.size;
       editor.commands.setTextSelection(Math.min(spot.pos, maxPos));
-      requestAnimationFrame(() => {
-        if (editorRef.current) editorRef.current.view.dom.scrollTop = spot.scrollTop;
-      });
     } else {
-      editor.view.dom.scrollTop = 0;
       editor.commands.setTextSelection(1);
     }
     if (activeTabPath) {
-      requestAnimationFrame(() => editorRef.current?.commands.focus());
+      requestAnimationFrame(() => {
+        const current = editorRef.current;
+        if (!current) return;
+        // WKWebView 替换内容后可能残留旧光标残影(Chromium 无此问题):强制重绘一次
+        const dom = current.view.dom;
+        dom.style.display = "none";
+        void dom.offsetHeight;
+        dom.style.display = "";
+        dom.scrollTop = spot ? spot.scrollTop : 0;
+        current.commands.focus();
+      });
     }
   }, [activeTabPath, content, editor, isDirty]);
 
