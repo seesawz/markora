@@ -643,7 +643,6 @@ body {
 
 .outline-panel {
   --outline-hover: rgba(0, 0, 0, 0.04);
-  --outline-active: rgba(0, 0, 0, 0.07);
   --outline-guide: rgba(0, 0, 0, 0.12);
 }
 
@@ -681,19 +680,12 @@ body {
   color: var(--text-primary);
 }
 
-.outline-row-active {
-  background: var(--outline-active);
-  color: var(--accent);
-  font-weight: 500;
-}
-
 .outline-empty {
   color: var(--text-tertiary);
 }
 
 :root.dark .outline-panel {
   --outline-hover: rgba(255, 255, 255, 0.04);
-  --outline-active: rgba(255, 255, 255, 0.10);
   --outline-guide: rgba(255, 255, 255, 0.14);
 }
 

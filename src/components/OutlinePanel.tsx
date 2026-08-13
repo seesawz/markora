@@ -52,31 +52,17 @@ function flatten(items: OutlineItem[]): OutlineItem[] {
   return items.flatMap((item) => [item, ...flatten(item.children)]);
 }
 
-/** 根据行号（1 起）计算该行起始的字符偏移 */
-function lineStartOffset(content: string, line: number): number {
-  let offset = 0;
-  for (let i = 1; i < line; i++) {
-    const idx = content.indexOf("\n", offset);
-    if (idx === -1) break;
-    offset = idx + 1;
-  }
-  return offset;
-}
-
 interface OutlineRowProps {
   item: OutlineItem;
-  activePath: number | null;
   onJump: (pos: number) => void;
 }
 
-function OutlineRow({ item, activePath, onJump }: OutlineRowProps) {
-  const active = activePath === item.pos;
-
+function OutlineRow({ item, onJump }: OutlineRowProps) {
   return (
     <div className="outline-tree-item">
       <button
         type="button"
-        className={`outline-row ${active ? "outline-row-active" : ""}`}
+        className="outline-row"
         onClick={() => onJump(item.pos)}
         title={item.text}
         aria-label={`H${item.level} ${item.text}`}
@@ -86,7 +72,7 @@ function OutlineRow({ item, activePath, onJump }: OutlineRowProps) {
       {item.children.length > 0 && (
         <div className="outline-tree-children">
           {item.children.map((child) => (
-            <OutlineRow key={child.pos} item={child} activePath={activePath} onJump={onJump} />
+            <OutlineRow key={child.pos} item={child} onJump={onJump} />
           ))}
         </div>
       )}
@@ -101,24 +87,11 @@ interface OutlinePanelProps {
   compact?: boolean;
 }
 
-/** 单文件模式下的文档标题目录：解析当前文档标题，点击跳转，当前节高亮 */
+/** 单文件模式下的文档标题目录：解析当前文档标题，点击跳转 */
 export function OutlinePanel({ onOpenFileDialog, onOpenFolder, compact = false }: OutlinePanelProps) {
   const content = useEditorStore((state) => state.content);
-  const cursorLine = useEditorStore((state) => state.cursorLine);
 
   const outline = useMemo(() => parseOutline(content), [content]);
-
-  const activePath = useMemo(() => {
-    if (!content || outline.length === 0) return null;
-    const cursorPos = lineStartOffset(content, cursorLine);
-    const flat = flatten(outline);
-    let active: OutlineItem | null = null;
-    for (const item of flat) {
-      if (item.pos <= cursorPos) active = item;
-      else break;
-    }
-    return active ? active.pos : null;
-  }, [content, cursorLine, outline]);
 
   const jumpTo = (pos: number) => {
     const editor = (window as any).__tiptapEditor;
@@ -177,7 +150,7 @@ export function OutlinePanel({ onOpenFileDialog, onOpenFolder, compact = false }
       ) : (
         <div className="overflow-y-auto pb-4">
           {outline.map((item) => (
-            <OutlineRow key={item.pos} item={item} activePath={activePath} onJump={jumpTo} />
+            <OutlineRow key={item.pos} item={item} onJump={jumpTo} />
           ))}
         </div>
       )}
