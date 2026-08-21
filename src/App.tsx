@@ -7,6 +7,7 @@ import { open, save, ask } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { writeText, readText } from "@tauri-apps/plugin-clipboard-manager";
 import { renderMarkdown, resolveLocalImages } from "./lib/markdown";
 import { t } from "./lib/i18n";
@@ -792,6 +793,19 @@ export default function App() {
           }
           break;
       }
+    });
+    return () => { unlisten.then((f) => f()); };
+  }, []);
+
+  // 拖文件进窗口:markdown/文本类文件逐个打开为标签
+  useEffect(() => {
+    const unlisten = getCurrentWebviewWindow().onDragDropEvent((event) => {
+      if (event.payload.type !== "drop") return;
+      const paths = event.payload.paths.filter((p) => /\.(md|markdown|mdx|mdown|mkd|txt|text|log)$/i.test(p));
+      if (paths.length === 0) return;
+      void (async () => {
+        for (const p of paths) await openFileInWorkspace(p);
+      })();
     });
     return () => { unlisten.then((f) => f()); };
   }, []);
